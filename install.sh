@@ -133,38 +133,11 @@ if [[ -f "$GEMINI_SETTINGS" && ! -f "$GEMINI_SETTINGS.pre-gemini-sandbox-install
   echo "    (backed up your existing settings to $GEMINI_SETTINGS.pre-gemini-sandbox-install)"
 fi
 
-AI_INTAKE_MCP_DIR="${AI_INTAKE_MCP_DIR:-}" GEMINI_SETTINGS_PATH="$GEMINI_SETTINGS" node -e '
-const fs = require("fs");
-const path = process.env.GEMINI_SETTINGS_PATH;
-let settings = {};
-if (fs.existsSync(path)) {
-  settings = JSON.parse(fs.readFileSync(path, "utf8"));
-}
-settings.mcpServers = settings.mcpServers || {};
-settings.mcpServers["chrome-devtools"] = {
-  // Absolute path, not bare chrome-devtools-mcp (PATH lookup) -- matches the ai-intake node path
-  // below. Not confirmed to be the cause of a real Connection closed case seen in the field
-  // (chrome-devtools-mcp worked fine when spawned directly via a plain docker run, but not
-  // through gemini own spawn path, for reasons not yet root-caused), but removing any PATH
-  // dependency from MCP server spawning is strictly safer regardless, and costs nothing.
-  command: "/usr/local/share/npm-global/bin/chrome-devtools-mcp",
-  args: [
-    "--headless",
-    "--executable-path", "/usr/bin/chromium",
-    "--chrome-arg=--no-sandbox",
-    "--chrome-arg=--disable-dev-shm-usage",
-  ],
-};
-const aiIntakeDir = process.env.AI_INTAKE_MCP_DIR;
-if (aiIntakeDir && fs.existsSync(aiIntakeDir)) {
-  settings.mcpServers["ai-intake"] = {
-    command: "/usr/bin/node",
-    args: [`${aiIntakeDir}/dist/index.js`],
-  };
-}
-fs.writeFileSync(path, JSON.stringify(settings, null, 2) + "\n");
-console.log("    registered:", Object.keys(settings.mcpServers).join(", "));
-'
+# Logic lives in merge-settings.js, not inline here -- see that file's header comment for why
+# (an inline bash single-quoted `node -e '...'` string broke twice from an apostrophe in a
+# comment closing the string early; a real .js file has no bash quoting to fight, and is also
+# just the more natural place to add a new MCP server registration later).
+AI_INTAKE_MCP_DIR="${AI_INTAKE_MCP_DIR:-}" GEMINI_SETTINGS_PATH="$GEMINI_SETTINGS" node "$TOOLKIT_DIR/merge-settings.js"
 
 echo ""
 echo "==> Done. From any project directory:"
