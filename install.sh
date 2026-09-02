@@ -139,7 +139,12 @@ if (fs.existsSync(path)) {
 }
 settings.mcpServers = settings.mcpServers || {};
 settings.mcpServers["chrome-devtools"] = {
-  command: "chrome-devtools-mcp",
+  // Absolute path, not bare chrome-devtools-mcp (PATH lookup) -- matches the ai-intake node path
+  // below. Not confirmed to be the cause of a real Connection closed case seen in the field
+  // (chrome-devtools-mcp worked fine when spawned directly via a plain docker run, but not
+  // through gemini own spawn path, for reasons not yet root-caused), but removing any PATH
+  // dependency from MCP server spawning is strictly safer regardless, and costs nothing.
+  command: "/usr/local/share/npm-global/bin/chrome-devtools-mcp",
   args: [
     "--headless",
     "--executable-path", "/usr/bin/chromium",
