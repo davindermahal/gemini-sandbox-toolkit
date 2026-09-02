@@ -21,10 +21,13 @@ else
   exit 1
 fi
 
+ENV_FILE="$TOOLKIT_DIR/env"
+[[ -f "$ENV_FILE" ]] && { set -a; source "$ENV_FILE"; set +a; }
+
 echo ""
 echo "==> Registered MCP servers (\$HOME/.gemini/settings.json)"
 if [[ -f "$HOME/.gemini/settings.json" ]]; then
-  node -e '
+  AI_INTAKE_MCP_DIR="${AI_INTAKE_MCP_DIR:-}" node -e '
     const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
     const servers = s.mcpServers || {};
     const names = Object.keys(servers);
@@ -32,13 +35,30 @@ if [[ -f "$HOME/.gemini/settings.json" ]]; then
     for (const [name, cfg] of Object.entries(servers)) {
       console.log(`  ${name}:`, JSON.stringify(cfg));
     }
-  ' "$HOME/.gemini/settings.json"
+    // install.sh always writes ai-intake as {command: "/usr/bin/node", args: [<AI_INTAKE_MCP_DIR>/dist/index.js]}
+    // -- anything else here was NOT written by this toolkit (a pre-existing registration from
+    // before it ran, most likely) and install.sh will never touch it unless AI_INTAKE_MCP_DIR is
+    // set to a directory that actually exists, by design (it never overwrites a server it is not
+    // configured to manage). Flag the mismatch explicitly rather than leaving it to be noticed by
+    // diffing JSON by eye.
+    const ai = servers["ai-intake"];
+    const expectedDir = process.env.AI_INTAKE_MCP_DIR;
+    if (ai && ai.command !== "/usr/bin/node") {
+      console.log("  [WARN] ai-intake command is " + JSON.stringify(ai.command) + ", not \"/usr/bin/node\" --");
+      console.log("         this was NOT written by this toolkit\x27s install.sh (likely a pre-existing");
+      console.log("         registration from before it ran). Bare \"node\" resolves inside the sandbox to");
+      console.log("         the bundled ~v20 Node, not the NodeSource v24 install -- if ai-intake-mcp needs");
+      console.log("         >=24 (native addon ABI mismatch), this crashes on startup: \"Connection closed\".");
+      console.log("         Fix: set AI_INTAKE_MCP_DIR in " + process.argv[2] + " to a real, existing path,");
+      console.log("         then re-run ./install.sh -- it will then overwrite this entry correctly.");
+    } else if (ai && expectedDir && !ai.args[0].startsWith(expectedDir)) {
+      console.log("  [WARN] ai-intake args path (" + ai.args[0] + ") does not match this host\x27s");
+      console.log("         AI_INTAKE_MCP_DIR (" + expectedDir + ") -- re-run ./install.sh to sync it.");
+    }
+  ' "$HOME/.gemini/settings.json" "$ENV_FILE"
 else
   fail "$HOME/.gemini/settings.json does not exist -- run ./install.sh"
 fi
-
-ENV_FILE="$TOOLKIT_DIR/env"
-[[ -f "$ENV_FILE" ]] && { set -a; source "$ENV_FILE"; set +a; }
 
 HANDSHAKE='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"debug","version":"0"}}}'
 
