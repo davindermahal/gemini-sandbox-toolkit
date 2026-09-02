@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Shared Gemini CLI sandbox wrapper -- usable from any project directory. Run from a project, it
+# sandboxes `gemini` and mounts that project's cwd in automatically (Gemini's own behavior, not
+# anything this script does); MCP server registration lives in ~/.gemini/settings.json (global,
+# set up by install.sh), not here, since the same MCP servers are meant to be available in every
+# project. See https://github.com/davindermahal/gemini-sandbox 's
+# .ai/guides/gemini-docker-sandbox-mcp.md for the full reasoning.
+set -euo pipefail
+
+TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# This script owns SANDBOX_MOUNTS entirely (built fresh below) but never sets SANDBOX_FLAGS -- a
+# *different* env var gemini-cli also reads for raw extra docker-run flags. A stray SANDBOX_FLAGS
+# left exported from an earlier manual setup attempt (e.g. its own docker.sock volume flag) would
+# silently combine with this script's own docker.sock mount and fail with Docker's "Duplicate
+# mount point" error. Note that editing .bashrc to remove an old export and re-sourcing it does
+# NOT unset a variable already exported in the current shell -- only `unset` or a fresh shell
+# does. Unset here so this script never depends on what's lingering in the caller's environment.
+unset SANDBOX_FLAGS
+
+ENV_FILE="$TOOLKIT_DIR/env"
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+# GEMINI_SANDBOX=docker enables the sandbox directly (env var, documented behavior) -- no
+# settings.json tools.sandbox needed, deliberately: setting that globally would force every
+# bare `gemini` invocation on this machine into sandbox mode, including one-off usage outside any
+# project. This wrapper is the opt-in; plain `gemini` stays unsandboxed.
+export GEMINI_SANDBOX=docker
+export GEMINI_SANDBOX_IMAGE=gemini-sandbox:latest
+
+# docker.sock must be explicit :rw -- SANDBOX_MOUNTS defaults an omitted mode to :ro, which would
+# leave the sandboxed `docker` CLI unable to issue commands over the socket.
+SANDBOX_MOUNTS="/var/run/docker.sock:/var/run/docker.sock:rw"
+
+# ai-intake-mcp, if configured (env.example): bind-mounted read-only at its real host path rather
+# than baked into the image -- it must run as a plain `node` child process sharing the sandboxed
+# CLI's cwd (see that project's own Dockerfile comment), so a separately-baked copy would resolve
+# paths against the wrong filesystem. Skipped entirely if not configured -- this toolkit works
+# without it.
+if [[ -n "${AI_INTAKE_MCP_DIR:-}" && -d "$AI_INTAKE_MCP_DIR" ]]; then
+  AI_INTAKE_MCP_CONFIG_DIR="$HOME/.config/ai-intake-mcp"
+  SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$AI_INTAKE_MCP_DIR:$AI_INTAKE_MCP_DIR:ro"
+  if [[ -d "$AI_INTAKE_MCP_CONFIG_DIR" ]]; then
+    SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$AI_INTAKE_MCP_CONFIG_DIR:$AI_INTAKE_MCP_CONFIG_DIR:ro"
+  fi
+fi
+
+# SANDBOX_MOUNTS entries must exist on the host or gemini refuses to start (FatalSandboxError:
+# "Missing mount path") -- so this is conditional, not hardcoded. Without it, admin-tier Policy
+# Engine rules at the standard system location are invisible inside the sandbox: it isn't one of
+# gemini's own auto-mounts (workspace, ~/.gemini, tmpdir, ~/.config/gcloud,
+# GOOGLE_APPLICATION_CREDENTIALS).
+ADMIN_POLICY_DIR="/etc/gemini-cli/policies"
+if [[ -d "$ADMIN_POLICY_DIR" ]]; then
+  SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$ADMIN_POLICY_DIR:$ADMIN_POLICY_DIR:ro"
+fi
+
+export SANDBOX_MOUNTS
+
+exec gemini "$@"
