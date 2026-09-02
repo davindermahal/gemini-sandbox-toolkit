@@ -87,27 +87,24 @@ echo "    buildx builder: $(docker buildx inspect 2>/dev/null | awk -F': *' '/^N
 # --- 3. Build the image, pinned to your installed CLI's version -------------------------------
 GEMINI_CLI_VERSION="$(gemini --version 2>/dev/null | tr -d '[:space:]')"
 echo "==> Building gemini-sandbox:latest (base image pinned to your gemini-cli version: $GEMINI_CLI_VERSION)"
-# Run from inside TOOLKIT_DIR with a *relative* -f, not an absolute path -- some BuildKit versions
-# fail to resolve an absolute Dockerfile path that's inside the build context ("failed to read
-# dockerfile: open sandbox.Dockerfile: no such file or directory", despite the file existing),
-# because BuildKit re-resolves -f relative to the context internally. If this still fails, the
-# diagnostics below (printed either way) are what to send back -- pwd, directory listing, and the
-# exact docker command about to run, so the next fix is based on real data instead of a guess.
-(
-  cd "$TOOLKIT_DIR"
-  echo "    build context: $(pwd)"
-  echo "    context contents:"
-  ls -la
-  DOCKER_GID_VAL="$(getent group docker | cut -d: -f3)"
-  set -x
-  docker build \
-    --build-arg DOCKER_GID="$DOCKER_GID_VAL" \
-    --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
-    -t gemini-sandbox:latest \
-    -f sandbox.Dockerfile \
-    .
-  set +x
-)
+# sandbox.Dockerfile has no COPY/ADD -- it never needs any local file besides itself -- so the
+# build is piped in via stdin with NO separate build context, rather than `-f sandbox.Dockerfile
+# .`. This isn't just a style choice: BuildKit's handling of `-f` against a directory context
+# turned out to be version-dependent (confirmed: it failed with "failed to read dockerfile: open
+# sandbox.Dockerfile: no such file or directory" on a host running an older buildx/BuildKit, even
+# with a relative path, a verified-correct cwd, and a completely clean environment -- two
+# different fixes attempting to work around that path-resolution behavior both failed). Piping the
+# Dockerfile via stdin removes BuildKit's context-relative dockerfile lookup from the equation
+# entirely, rather than trying to satisfy whatever that lookup wants on every BuildKit version.
+DOCKER_GID_VAL="$(getent group docker | cut -d: -f3)"
+echo "    dockerfile: $TOOLKIT_DIR/sandbox.Dockerfile (piped via stdin, no separate build context needed)"
+set -x
+docker build \
+  --build-arg DOCKER_GID="$DOCKER_GID_VAL" \
+  --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
+  -t gemini-sandbox:latest \
+  - < "$TOOLKIT_DIR/sandbox.Dockerfile"
+set +x
 
 # --- 4. Install the wrapper ---------------------------------------------------------------------
 echo "==> Installing bin/gemini-sandbox to $BIN_DIR"
