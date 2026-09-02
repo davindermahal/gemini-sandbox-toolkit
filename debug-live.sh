@@ -21,8 +21,26 @@ PROMPT="${1:-List the MCP tools available to you, then call one cheap read-only 
 
 echo "==> Running a real, --debug gemini-sandbox -s session (uses one live model turn against your configured gemini auth; timeout ${TIMEOUT}s)"
 echo "    Prompt: $PROMPT"
-timeout "$TIMEOUT" "$TOOLKIT_DIR/bin/gemini-sandbox" -s -d --skip-trust -y -p "$PROMPT" > "$LOG" 2>&1
+# --kill-after: plain `timeout N cmd` only sends SIGTERM after N seconds and then WAITS
+# indefinitely for the process to actually exit -- if it (or a child of it, like the docker
+# container gemini spawns as a grandchild, not something SIGTERM to the tracked process
+# necessarily reaches) ignores or is unresponsive to SIGTERM, timeout never actually returns.
+# --kill-after=15 forces a real SIGKILL 15s after the SIGTERM if it's still running, guaranteeing
+# this script itself terminates within TIMEOUT+15s no matter what.
+timeout --kill-after=15 "$TIMEOUT" "$TOOLKIT_DIR/bin/gemini-sandbox" -s -d --skip-trust -y -p "$PROMPT" > "$LOG" 2>&1
 EXIT_CODE=$?
+
+# Belt-and-suspenders: a SIGKILL to the tracked process (gemini, via `exec` in bin/gemini-sandbox)
+# does not necessarily reach its own docker-run child (a separate PID, not in the same process
+# group by default), which can leave the sandbox container itself running even after this script
+# exits -- confirmed to happen in practice. Force-clean any of this tool's sandbox containers
+# unconditionally; they're always meant to be single-use and ephemeral (--rm), so this is safe
+# even if it removes one from a different concurrent run.
+LEFTOVER="$(docker ps -aq --filter "name=gemini-sandbox-latest-" 2>/dev/null || true)"
+if [[ -n "$LEFTOVER" ]]; then
+  echo "==> Cleaning up leftover sandbox container(s) (SIGKILL to gemini doesn't reach its own docker-run child):"
+  docker rm -f $LEFTOVER | sed 's/^/  removed: /'
+fi
 
 echo ""
 echo "==> SANDBOX_MOUNTS actually applied (confirms the sandbox itself launched and what's mounted):"
