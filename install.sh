@@ -81,12 +81,20 @@ fi
 # --- 3. Build the image, pinned to your installed CLI's version -------------------------------
 GEMINI_CLI_VERSION="$(gemini --version 2>/dev/null | tr -d '[:space:]')"
 echo "==> Building gemini-sandbox:latest (base image pinned to your gemini-cli version: $GEMINI_CLI_VERSION)"
-docker build \
-  --build-arg DOCKER_GID="$(getent group docker | cut -d: -f3)" \
-  --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
-  -t gemini-sandbox:latest \
-  -f "$TOOLKIT_DIR/sandbox.Dockerfile" \
-  "$TOOLKIT_DIR"
+# Run from inside TOOLKIT_DIR with a *relative* -f, not an absolute path -- some BuildKit versions
+# fail to resolve an absolute Dockerfile path that's inside the build context ("failed to read
+# dockerfile: open sandbox.Dockerfile: no such file or directory", despite the file existing),
+# because BuildKit re-resolves -f relative to the context internally. Relative avoids the
+# ambiguity entirely and works the same on versions where the absolute form happened to be fine.
+(
+  cd "$TOOLKIT_DIR"
+  docker build \
+    --build-arg DOCKER_GID="$(getent group docker | cut -d: -f3)" \
+    --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
+    -t gemini-sandbox:latest \
+    -f sandbox.Dockerfile \
+    .
+)
 
 # --- 4. Install the wrapper ---------------------------------------------------------------------
 echo "==> Installing bin/gemini-sandbox to $BIN_DIR"
