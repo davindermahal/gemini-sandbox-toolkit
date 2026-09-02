@@ -57,6 +57,21 @@ Plain `gemini` (no wrapper) stays unsandboxed — `gemini-sandbox` is the opt-in
 default. Gemini auto-mounts whatever directory you run it from, so this same command works
 against any project without any per-project setup.
 
+## Troubleshooting
+
+If `gemini-sandbox` starts but an MCP server shows disconnected (e.g. `MCP error -32000:
+Connection closed`), run:
+
+```bash
+./debug.sh
+```
+
+It launches each registered MCP server directly inside the actual sandbox image and runs a real
+MCP handshake with it — the same mechanism `gemini`'s own sandbox uses — with no `gemini`
+invocation and no API quota needed. Tells you whether the problem is in the image/mounts (fails
+here too) or specific to how `gemini` is spawning things (passes here, fails only through
+`gemini`), plus prints the exact registered config and host/container memory info.
+
 ## Updating on a machine where it's already installed
 
 ```bash
