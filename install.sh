@@ -37,16 +37,19 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # --- 2. Environment conflict check ------------------------------------------------------------
-# Two known, previously-hit failure modes, both from an EARLIER manual sandbox setup attempt
-# still lingering somewhere: a stray SANDBOX_FLAGS with its own docker.sock mount collides with
-# this wrapper's own (Docker's "Duplicate mount point" error), and a stray GEMINI_SANDBOX_IMAGE
-# pointing at a different, older image (this wrapper always overrides it for its OWN invocations,
-# but plain `gemini` with GEMINI_SANDBOX also set from an rc file would silently use the stale
-# image instead of this toolkit's). This script can't unset variables in the shell that invoked
-# it (a subprocess can't reach back into its parent's environment) or in rc files it hasn't been
-# told to edit -- so it reports what it finds instead of guessing at a fix.
+# Previously-hit failure modes, all from an EARLIER manual sandbox setup attempt still lingering
+# somewhere: a stray SANDBOX_FLAGS with its own docker.sock mount collides with this wrapper's own
+# (Docker's "Duplicate mount point" error); a stray GEMINI_SANDBOX_IMAGE points at a different,
+# older image (this wrapper overrides it for its OWN invocations, but plain `gemini` with
+# GEMINI_SANDBOX also set from an rc file would silently use the stale image instead); and
+# DOCKER_HOST/DOCKER_CONTEXT/DOCKER_BUILDKIT/BUILDX_BUILDER can point `docker build` itself at a
+# different daemon, context, or builder than expected -- worth surfacing even though this toolkit
+# doesn't use any of them, since a stale one from an earlier attempt can make `docker build`
+# behave in ways that look like a bug in this script but aren't. This script can't unset variables
+# in the shell that invoked it (a subprocess can't reach back into its parent's environment) or in
+# rc files it hasn't been told to edit -- so it reports what it finds instead of guessing.
 echo "==> Checking for conflicting environment from an earlier manual sandbox setup"
-conflict_vars=(GEMINI_SANDBOX GEMINI_SANDBOX_IMAGE SANDBOX_MOUNTS SANDBOX_FLAGS)
+conflict_vars=(GEMINI_SANDBOX GEMINI_SANDBOX_IMAGE SANDBOX_MOUNTS SANDBOX_FLAGS DOCKER_HOST DOCKER_CONTEXT DOCKER_BUILDKIT BUILDX_BUILDER)
 found_any=0
 for var in "${conflict_vars[@]}"; do
   if [[ -n "${!var:-}" ]]; then
@@ -59,7 +62,7 @@ for rc in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.zshrc" "$HOME/.profile";
   [[ -f "$rc" ]] || continue
   while IFS= read -r line; do
     rc_hits+=("$rc: $line")
-  done < <(grep -nE "export[[:space:]]+(GEMINI_SANDBOX|GEMINI_SANDBOX_IMAGE|SANDBOX_MOUNTS|SANDBOX_FLAGS)=" "$rc" 2>/dev/null || true)
+  done < <(grep -nE "export[[:space:]]+(GEMINI_SANDBOX|GEMINI_SANDBOX_IMAGE|SANDBOX_MOUNTS|SANDBOX_FLAGS|DOCKER_HOST|DOCKER_CONTEXT|DOCKER_BUILDKIT|BUILDX_BUILDER)=" "$rc" 2>/dev/null || true)
 done
 if [[ ${#rc_hits[@]} -gt 0 ]]; then
   found_any=1
@@ -69,14 +72,17 @@ fi
 if [[ "$found_any" -eq 1 ]]; then
   echo "    This toolkit's wrapper (bin/gemini-sandbox) sets GEMINI_SANDBOX, GEMINI_SANDBOX_IMAGE,"
   echo "    and SANDBOX_MOUNTS itself on every run -- lines above won't break \`gemini-sandbox\`"
-  echo "    specifically, but SANDBOX_FLAGS can still collide with its docker.sock mount, and any"
-  echo "    of these left exported will affect plain \`gemini\` (e.g. an old GEMINI_SANDBOX_IMAGE"
-  echo "    pointing at a different image). Recommended: remove the export lines above from your"
-  echo "    rc file(s) and open a fresh shell -- editing a rc file alone doesn't unset a variable"
-  echo "    already exported in your CURRENT shell."
+  echo "    specifically, but SANDBOX_FLAGS can still collide with its docker.sock mount, a stale"
+  echo "    DOCKER_HOST/DOCKER_CONTEXT/BUILDX_BUILDER can point \`docker build\` at an unexpected"
+  echo "    daemon or builder, and any of these left exported will affect plain \`gemini\`/\`docker\`"
+  echo "    generally. Recommended: remove the export lines above from your rc file(s) and open a"
+  echo "    fresh shell -- editing a rc file alone doesn't unset a variable already exported in"
+  echo "    your CURRENT shell."
 else
   echo "    none found -- clean."
 fi
+echo "    active docker context: $(docker context show 2>/dev/null || echo '(none / classic)')"
+echo "    buildx builder: $(docker buildx inspect 2>/dev/null | awk -F': *' '/^Name:/{print $2; exit}' || echo '(unavailable)')"
 
 # --- 3. Build the image, pinned to your installed CLI's version -------------------------------
 GEMINI_CLI_VERSION="$(gemini --version 2>/dev/null | tr -d '[:space:]')"
@@ -84,16 +90,23 @@ echo "==> Building gemini-sandbox:latest (base image pinned to your gemini-cli v
 # Run from inside TOOLKIT_DIR with a *relative* -f, not an absolute path -- some BuildKit versions
 # fail to resolve an absolute Dockerfile path that's inside the build context ("failed to read
 # dockerfile: open sandbox.Dockerfile: no such file or directory", despite the file existing),
-# because BuildKit re-resolves -f relative to the context internally. Relative avoids the
-# ambiguity entirely and works the same on versions where the absolute form happened to be fine.
+# because BuildKit re-resolves -f relative to the context internally. If this still fails, the
+# diagnostics below (printed either way) are what to send back -- pwd, directory listing, and the
+# exact docker command about to run, so the next fix is based on real data instead of a guess.
 (
   cd "$TOOLKIT_DIR"
+  echo "    build context: $(pwd)"
+  echo "    context contents:"
+  ls -la
+  DOCKER_GID_VAL="$(getent group docker | cut -d: -f3)"
+  set -x
   docker build \
-    --build-arg DOCKER_GID="$(getent group docker | cut -d: -f3)" \
+    --build-arg DOCKER_GID="$DOCKER_GID_VAL" \
     --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
     -t gemini-sandbox:latest \
     -f sandbox.Dockerfile \
     .
+  set +x
 )
 
 # --- 4. Install the wrapper ---------------------------------------------------------------------
