@@ -72,6 +72,19 @@ invocation and no API quota needed. Tells you whether the problem is in the imag
 here too) or specific to how `gemini` is spawning things (passes here, fails only through
 `gemini`), plus prints the exact registered config and host/container memory info.
 
+**If `debug.sh` passes but it still fails through a real `gemini-sandbox -s` session**, that means
+the image and mounts are fine and the problem is specifically in how `gemini` spawns things —
+`debug.sh` can't see that, by design. Run:
+
+```bash
+./debug-live.sh
+```
+
+This drives an actual `gemini -s -d` (debug mode) session and extracts every registered MCP
+server's real stderr plus connection lifecycle messages — the diagnostic that actually found a
+real bug this way (a symlink-resolution issue in the wrapper itself, not an MCP problem). Costs
+real API quota (one live model turn), so run `debug.sh` first.
+
 ## Updating on a machine where it's already installed
 
 ```bash
