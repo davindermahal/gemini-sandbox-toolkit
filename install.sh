@@ -16,7 +16,10 @@
 # upgrade -- re-running repins the sandbox image to your current CLI version).
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# readlink -f resolves symlinks first -- see bin/gemini-sandbox's comment on the same line for
+# why this matters (a real bug hit here: without it, TOOLKIT_DIR resolves wrong when this script
+# is invoked through a symlink rather than its real path).
+TOOLKIT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 BIN_DIR="$HOME/.local/bin"
 GEMINI_SETTINGS="$HOME/.gemini/settings.json"
 

@@ -7,7 +7,8 @@
 # uses to talk to an MCP server -- so a failure here reproduces the real problem directly.
 set -uo pipefail   # not -e: keep going through every check even if one fails, report all of them
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# readlink -f resolves symlinks first -- see bin/gemini-sandbox's comment on the same line.
+TOOLKIT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 IMAGE=gemini-sandbox:latest
 
 pass() { echo "  [OK]   $1"; }

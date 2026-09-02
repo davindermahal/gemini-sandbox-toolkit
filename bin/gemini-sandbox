@@ -7,7 +7,17 @@
 # .ai/guides/gemini-docker-sandbox-mcp.md for the full reasoning.
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# readlink -f resolves the symlink chain BEFORE computing the directory -- required because
+# install.sh installs this script as a symlink at ~/.local/bin/gemini-sandbox. Without it,
+# ${BASH_SOURCE[0]} reports the symlink's own path when invoked via PATH (as `gemini-sandbox`,
+# the normal way), not the real file it points to, so TOOLKIT_DIR silently resolved to
+# ~/.local (the symlink's parent's parent) instead of ~/.gemini-sandbox -- env, at
+# ~/.local/env, was never found, AI_INTAKE_MCP_DIR was never set, and the ai-intake mount was
+# silently never added to SANDBOX_MOUNTS. Confirmed via `bash -x`: direct invocation
+# (~/.gemini-sandbox/bin/gemini-sandbox) computed TOOLKIT_DIR correctly and masked this for
+# every manual test; only invoking it as `gemini-sandbox` through the installed symlink (the
+# only way it's actually used day to day) hit the bug.
+TOOLKIT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 
 # This script owns SANDBOX_MOUNTS entirely (built fresh below) but never sets SANDBOX_FLAGS -- a
 # *different* env var gemini-cli also reads for raw extra docker-run flags. A stray SANDBOX_FLAGS
