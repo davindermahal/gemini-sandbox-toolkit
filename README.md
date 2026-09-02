@@ -82,8 +82,10 @@ the image and mounts are fine and the problem is specifically in how `gemini` sp
 
 This drives an actual `gemini -s -d` (debug mode) session and extracts every registered MCP
 server's real stderr plus connection lifecycle messages — the diagnostic that actually found a
-real bug this way (a symlink-resolution issue in the wrapper itself, not an MCP problem). Costs
-real API quota (one live model turn), so run `debug.sh` first.
+real bug this way (a symlink-resolution issue in the wrapper itself, not an MCP problem). Makes
+one live model call — draws on whatever account/auth `gemini` is already configured with (a
+Developer API key, Code Assist via a Google account, Vertex AI), so run `debug.sh` first since it
+makes no such call at all.
 
 ## Updating on a machine where it's already installed
 

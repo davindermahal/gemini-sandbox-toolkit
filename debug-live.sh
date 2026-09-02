@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Live MCP diagnostic -- unlike debug.sh (isolated docker run, no gemini, no API quota), this
+# Live MCP diagnostic -- unlike debug.sh (isolated docker run, no gemini, no live model call), this
 # drives a REAL `gemini-sandbox -s -d` session and extracts each MCP server's actual stderr
 # output. This is what actually found the root cause of a real "Connection closed" bug (a
 # symlink-resolution bug in the wrapper itself, not an MCP problem at all) -- debug.sh proved the
@@ -7,7 +7,10 @@
 # replicate gemini's own process tree, spawn mechanism, or environment construction. Reach for
 # this whenever a server is healthy in debug.sh but still fails through a real gemini session.
 #
-# Costs real API quota (one live model turn) -- debug.sh is free and should be run first.
+# Makes one real request against whatever account/auth gemini is configured with (a Developer API
+# key, a Google account via Code Assist, Vertex AI -- whatever `gemini` itself already uses),
+# drawing from that account's own usage/quota, whatever pool that is. debug.sh makes no such
+# request at all and should be run first.
 set -uo pipefail
 
 TOOLKIT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -16,7 +19,7 @@ LOG="$(mktemp /tmp/gemini-sandbox-debug-live.XXXXXX)"
 
 PROMPT="${1:-List the MCP tools available to you, then call one cheap read-only tool from each connected MCP server and report exactly what each returns.}"
 
-echo "==> Running a real, --debug gemini-sandbox -s session (uses API quota; timeout ${TIMEOUT}s)"
+echo "==> Running a real, --debug gemini-sandbox -s session (uses one live model turn against your configured gemini auth; timeout ${TIMEOUT}s)"
 echo "    Prompt: $PROMPT"
 timeout "$TIMEOUT" "$TOOLKIT_DIR/bin/gemini-sandbox" -s -d --skip-trust -y -p "$PROMPT" > "$LOG" 2>&1
 EXIT_CODE=$?
