@@ -100,8 +100,10 @@ git pull
 - `sandbox.Dockerfile` — the image: Docker CLI + compose plugin (for Docker-outside-of-Docker),
   a second Node runtime for MCP servers needing a newer version than the sandbox's bundled one,
   Chromium + `chrome-devtools-mcp`.
-- `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`, and
-  `SANDBOX_MOUNTS` (docker.sock, plus `ai-intake-mcp` if configured), then execs `gemini`.
+- `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`,
+  `SANDBOX_MOUNTS` (docker.sock, plus `ai-intake-mcp` if configured), and `SANDBOX_FLAGS`
+  (`--group-add` for docker.sock's actual GID on this host, so the image works even on a host
+  whose docker group GID differs from the one baked in at build time), then execs `gemini`.
 - `env.example` / `env` (gitignored, per-machine) — currently just `AI_INTAKE_MCP_DIR`.
 - `install.sh` — checks prerequisites and environment, builds the image, and wires everything
   above into place.
