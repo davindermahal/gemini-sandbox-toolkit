@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Registers this toolkit's MCP servers into the global ~/.gemini/settings.json, merging with
 // whatever is already there rather than overwriting it. Run by install.sh (via `node
-// merge-settings.js`, with GEMINI_SETTINGS_PATH and AI_INTAKE_MCP_DIR set in its environment),
+// merge-settings.js`, with GEMINI_SETTINGS_PATH and AI_INTAKE_MCP_DIR / AI_INTAKE_DOCUMENTATION_MCP_DIR
+// set in its environment),
 // not meant to be run directly.
 //
 // To add a new MCP server to this toolkit: add an entry to settings.mcpServers below. This used
@@ -42,11 +43,31 @@ settings.mcpServers["chrome-devtools"] = {
 // Conditional: only registered if AI_INTAKE_MCP_DIR is set and actually exists on this host (see
 // env.example) -- never overwrites this entry otherwise, even if something else already
 // registered "ai-intake" (e.g. that server's own setup docs, run directly against the host).
+//
+// TEMPLATE FOR ADDING ANOTHER SERVER WITH LOCAL STATE (e.g. cloned from GitHub): copy this block.
+// command MUST be the absolute path "/usr/bin/node" if the server's package.json `engines` needs
+// Node >=24 (never bare "node" -- see sandbox.Dockerfile's comment on the two Node runtimes for
+// why bare "node" silently resolves to the wrong, older one and breaks native addons). args[0]
+// should be the in-container path to its built entry point -- identical to the host path here,
+// since bin/gemini-sandbox bind-mounts it at that same absolute path (SANDBOX_MOUNTS), not a
+// separate in-image copy.
 const aiIntakeDir = process.env.AI_INTAKE_MCP_DIR;
 if (aiIntakeDir && fs.existsSync(aiIntakeDir)) {
   settings.mcpServers["ai-intake"] = {
     command: "/usr/bin/node",
     args: [`${aiIntakeDir}/dist/index.js`],
+  };
+}
+
+// Same convention, applied: an npm-workspaces monorepo, so its built server lives one level
+// deeper than the checkout root -- packages/documentation-mcp/dist/index.js, produced by `npm
+// install && npm run build` at the repo root (workspaces get symlinked and built together; no
+// npm-registry publish of the internal @davindermahal/context-schema dependency required).
+const aiIntakeDocsDir = process.env.AI_INTAKE_DOCUMENTATION_MCP_DIR;
+if (aiIntakeDocsDir && fs.existsSync(aiIntakeDocsDir)) {
+  settings.mcpServers["ai-intake-documentation"] = {
+    command: "/usr/bin/node",
+    args: [`${aiIntakeDocsDir}/packages/documentation-mcp/dist/index.js`],
   };
 }
 

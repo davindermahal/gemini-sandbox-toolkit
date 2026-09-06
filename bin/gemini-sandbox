@@ -68,6 +68,14 @@ if [[ -n "${AI_INTAKE_MCP_DIR:-}" && -d "$AI_INTAKE_MCP_DIR" ]]; then
   fi
 fi
 
+# ai-intake-documentation-mcp, if configured (env.example): same convention as ai-intake-mcp above
+# -- bind-mounted read-only at its real host path, npm-workspaces monorepo built locally once
+# (`npm install && npm run build`, produces packages/documentation-mcp/dist/index.js), no config
+# dir of its own (it works against the mounted project's own .ai/ directory, not host-level state).
+if [[ -n "${AI_INTAKE_DOCUMENTATION_MCP_DIR:-}" && -d "$AI_INTAKE_DOCUMENTATION_MCP_DIR" ]]; then
+  add_mount "$AI_INTAKE_DOCUMENTATION_MCP_DIR:$AI_INTAKE_DOCUMENTATION_MCP_DIR:ro"
+fi
+
 # SANDBOX_MOUNTS entries must exist on the host or gemini refuses to start (FatalSandboxError:
 # "Missing mount path") -- so this is conditional, not hardcoded. Without it, admin-tier Policy
 # Engine rules at the standard system location are invisible inside the sandbox: it isn't one of

@@ -7,10 +7,10 @@
 #   2. Builds the sandbox image (a second Node runtime, Chromium, chrome-devtools-mcp -- no Docker
 #      CLI/daemon access), tagged gemini-sandbox:latest, pinned to your installed CLI's version.
 #   3. Puts the `gemini-sandbox` wrapper on your PATH via ~/.local/bin.
-#   4. Registers chrome-devtools-mcp (and ai-intake-mcp, if env is configured) in your global
-#      ~/.gemini/settings.json -- merged in, existing settings are preserved. A one-time backup
-#      is written to ~/.gemini/settings.json.pre-gemini-sandbox-install if one doesn't already
-#      exist.
+#   4. Registers chrome-devtools-mcp (and ai-intake-mcp / ai-intake-documentation-mcp, if env is
+#      configured) in your global ~/.gemini/settings.json -- merged in, existing settings are
+#      preserved. A one-time backup is written to ~/.gemini/settings.json.pre-gemini-sandbox-install
+#      if one doesn't already exist.
 #
 # Safe to re-run any time (e.g. after editing sandbox.Dockerfile or env, or after a gemini-cli
 # upgrade -- re-running repins the sandbox image to your current CLI version).
@@ -117,7 +117,7 @@ fi
 
 if [[ ! -f "$TOOLKIT_DIR/env" ]]; then
   cp "$TOOLKIT_DIR/env.example" "$TOOLKIT_DIR/env"
-  echo "==> Wrote $TOOLKIT_DIR/env from the template -- edit it to set AI_INTAKE_MCP_DIR (or leave blank if you don't use it)."
+  echo "==> Wrote $TOOLKIT_DIR/env from the template -- edit it to set AI_INTAKE_MCP_DIR / AI_INTAKE_DOCUMENTATION_MCP_DIR (or leave blank if you don't use them)."
 fi
 # shellcheck disable=SC1090
 source "$TOOLKIT_DIR/env" 2>/dev/null || true
@@ -134,7 +134,9 @@ fi
 # (an inline bash single-quoted `node -e '...'` string broke twice from an apostrophe in a
 # comment closing the string early; a real .js file has no bash quoting to fight, and is also
 # just the more natural place to add a new MCP server registration later).
-AI_INTAKE_MCP_DIR="${AI_INTAKE_MCP_DIR:-}" GEMINI_SETTINGS_PATH="$GEMINI_SETTINGS" node "$TOOLKIT_DIR/merge-settings.js"
+AI_INTAKE_MCP_DIR="${AI_INTAKE_MCP_DIR:-}" \
+AI_INTAKE_DOCUMENTATION_MCP_DIR="${AI_INTAKE_DOCUMENTATION_MCP_DIR:-}" \
+GEMINI_SETTINGS_PATH="$GEMINI_SETTINGS" node "$TOOLKIT_DIR/merge-settings.js"
 
 echo ""
 echo "==> Done. From any project directory:"

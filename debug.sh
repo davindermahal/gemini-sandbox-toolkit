@@ -101,6 +101,28 @@ else
 fi
 
 echo ""
+echo "==> ai-intake-documentation-mcp: launch + MCP initialize handshake, inside the actual image"
+if [[ -z "${AI_INTAKE_DOCUMENTATION_MCP_DIR:-}" ]]; then
+  echo "  (skipped -- AI_INTAKE_DOCUMENTATION_MCP_DIR not set in $ENV_FILE)"
+elif [[ ! -d "$AI_INTAKE_DOCUMENTATION_MCP_DIR" ]]; then
+  fail "AI_INTAKE_DOCUMENTATION_MCP_DIR=$AI_INTAKE_DOCUMENTATION_MCP_DIR does not exist on this host"
+else
+  ENTRY="$AI_INTAKE_DOCUMENTATION_MCP_DIR/packages/documentation-mcp/dist/index.js"
+  MOUNTS=(-v "$AI_INTAKE_DOCUMENTATION_MCP_DIR:$AI_INTAKE_DOCUMENTATION_MCP_DIR:ro")
+  OUT="$(docker run --rm --entrypoint sh "${MOUNTS[@]}" "$IMAGE" -c "
+    test -f '$ENTRY' || { echo DIST_MISSING -- run 'npm install \&\& npm run build' in $AI_INTAKE_DOCUMENTATION_MCP_DIR; exit 1; }
+    echo '$HANDSHAKE' | timeout 15 /usr/bin/node '$ENTRY'
+    echo EXIT_CODE:\$?
+  " 2>&1)"
+  if echo "$OUT" | grep -q '"serverInfo"'; then
+    pass "responded correctly"
+  else
+    fail "did not respond with a valid MCP handshake. Full output:"
+    echo "$OUT" | sed 's/^/    /'
+  fi
+fi
+
+echo ""
 echo "==> Resources (a process that starts then immediately dies is often OOM-killed --"
 echo "    Chrome in particular is memory-hungry, and this is common in constrained containers/VMs)"
 echo "  host memory:"

@@ -29,11 +29,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# The base image bundles its own Node (older, used internally by the gemini-cli binary re-exec'd
-# inside this sandbox) at /usr/local/bin/node -- left untouched. Some MCP servers (e.g.
-# ai-intake-mcp) require Node >=24 and ship native addons built against a specific Node major, so
-# a second runtime lives here at a different path; NodeSource installs to /usr/bin/node, so both
-# coexist. Referenced by absolute path in mcpServers entries that need it.
+# The base image bundles its own Node (currently v20.20.2) at /usr/local/bin/node -- left
+# untouched, deliberately: gemini's own launcher script resolves `node` via `#!/usr/bin/env node`
+# (a PATH lookup, not a hardcoded path) and /usr/local/bin wins that lookup, so this is the Node
+# version that runs the gemini CLI process itself inside the container. It's the one Google
+# publishes and tests this image with -- don't repoint it at the runtime below, even though a
+# quick `gemini --version` smoke test was observed to still pass on Node 24 (confirmed 2026-09;
+# not proof the full CLI is fine on an untested major version).
+#
+# Some MCP servers (e.g. ai-intake-mcp) require Node >=24 and ship native addons built against a
+# specific Node major, so a second runtime lives here at a different path; NodeSource installs to
+# /usr/bin/node (currently tracks the 24.x line, so it stays current automatically), so both
+# coexist. THE CONVENTION FOR ANY NEW MCP SERVER THAT NEEDS A MODERN NODE: register it in
+# merge-settings.js with `command: "/usr/bin/node"` -- the absolute path, never bare `"node"`.
+# Bare `"node"` in a mcpServers entry resolves to the OLD bundled v20 (same PATH-lookup mechanism
+# as gemini's own launcher above), which is exactly the native-addon ABI mismatch that breaks a
+# server needing >=24 with a bare "Connection closed" error and no more specific reason in the
+# logs -- see debug.sh's ai-intake check, which detects and warns about exactly this mistake.
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*

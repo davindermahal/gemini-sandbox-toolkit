@@ -39,10 +39,11 @@ What it does:
    `install.sh`).
 3. **Symlinks `bin/gemini-sandbox` into `~/.local/bin`.**
 4. **Registers MCP servers globally** in `~/.gemini/settings.json` — `chrome-devtools-mcp`
-   always, `ai-intake-mcp` if you set `AI_INTAKE_MCP_DIR` in `env` (copy `env.example` to `env`
-   first, or just leave it unset if you don't use that server). This **merges** into your existing
-   settings rather than overwriting them, and backs up the original once, to
-   `~/.gemini/settings.json.pre-gemini-sandbox-install`, the first time it runs.
+   always, plus `ai-intake-mcp` / `ai-intake-documentation-mcp` if you set their `_DIR` vars in
+   `env` (copy `env.example` to `env` first, or just leave them unset if you don't use those
+   servers). This **merges** into your existing settings rather than overwriting them, and backs
+   up the original once, to `~/.gemini/settings.json.pre-gemini-sandbox-install`, the first time
+   it runs.
 
 Safe to re-run any time — every step is idempotent.
 
@@ -102,8 +103,10 @@ git pull
   newer version than the sandbox's bundled one, Chromium + `chrome-devtools-mcp`. No Docker
   CLI/daemon access — nothing inside the sandbox can reach the host's Docker daemon.
 - `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`, and
-  `SANDBOX_MOUNTS` (`ai-intake-mcp` if configured, plus an admin policy dir if present, and nothing
-  else — deliberately no docker.sock mount), then execs `gemini`.
-- `env.example` / `env` (gitignored, per-machine) — currently just `AI_INTAKE_MCP_DIR`.
+  `SANDBOX_MOUNTS` (`ai-intake-mcp` / `ai-intake-documentation-mcp` if configured, plus an admin
+  policy dir if present, and nothing else — deliberately no docker.sock mount), then execs
+  `gemini`.
+- `env.example` / `env` (gitignored, per-machine) — `AI_INTAKE_MCP_DIR` and
+  `AI_INTAKE_DOCUMENTATION_MCP_DIR`.
 - `install.sh` — checks prerequisites and environment, builds the image, and wires everything
   above into place.
