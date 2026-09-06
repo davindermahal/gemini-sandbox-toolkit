@@ -55,11 +55,12 @@ add_mount() {
   fi
 }
 
-# ai-intake-mcp, if configured (env.example): bind-mounted read-only at its real host path rather
-# than baked into the image -- it must run as a plain `node` child process sharing the sandboxed
-# CLI's cwd (see that project's own Dockerfile comment), so a separately-baked copy would resolve
-# paths against the wrong filesystem. Skipped entirely if not configured -- this toolkit works
-# without it.
+# ai-intake-mcp local-dev override, if configured (env.example): both ai-intake-mcp and
+# ai-intake-documentation-mcp are baked into the image at pinned published versions by default
+# (sandbox.Dockerfile) -- this mount + merge-settings.js's matching override only kick in if
+# AI_INTAKE_MCP_DIR is set to a real local clone, letting you iterate (git pull + npm build)
+# without publishing a new version and rebuilding the image each time. Skipped entirely if not
+# configured -- install.sh alone is sufficient without this.
 if [[ -n "${AI_INTAKE_MCP_DIR:-}" && -d "$AI_INTAKE_MCP_DIR" ]]; then
   AI_INTAKE_MCP_CONFIG_DIR="$HOME/.config/ai-intake-mcp"
   add_mount "$AI_INTAKE_MCP_DIR:$AI_INTAKE_MCP_DIR:ro"
@@ -68,10 +69,10 @@ if [[ -n "${AI_INTAKE_MCP_DIR:-}" && -d "$AI_INTAKE_MCP_DIR" ]]; then
   fi
 fi
 
-# ai-intake-documentation-mcp, if configured (env.example): same convention as ai-intake-mcp above
-# -- bind-mounted read-only at its real host path, npm-workspaces monorepo built locally once
-# (`npm install && npm run build`, produces packages/documentation-mcp/dist/index.js), no config
-# dir of its own (it works against the mounted project's own .ai/ directory, not host-level state).
+# ai-intake-documentation-mcp local-dev override, same convention as ai-intake-mcp above -- an
+# npm-workspaces monorepo, built locally once (`npm install && npm run build`, produces
+# packages/documentation-mcp/dist/index.js), no config dir of its own (it works against the
+# mounted project's own .ai/ directory, not host-level state).
 if [[ -n "${AI_INTAKE_DOCUMENTATION_MCP_DIR:-}" && -d "$AI_INTAKE_DOCUMENTATION_MCP_DIR" ]]; then
   add_mount "$AI_INTAKE_DOCUMENTATION_MCP_DIR:$AI_INTAKE_DOCUMENTATION_MCP_DIR:ro"
 fi

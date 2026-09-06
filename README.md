@@ -125,3 +125,6 @@ git pull
   `AI_INTAKE_DOCUMENTATION_MCP_DIR`, the local-dev override described above. Optional.
 - `install.sh` — checks prerequisites and environment, builds the image, and wires everything
   above into place.
+- `merge-settings.js` — the actual `mcpServers` registration logic install.sh runs; edit this to
+  add, remove, or change a registered server.
+- `debug.sh` / `debug-live.sh` — see [Troubleshooting](#troubleshooting) above.

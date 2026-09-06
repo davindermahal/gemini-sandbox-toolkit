@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Registers this toolkit's MCP servers into the global ~/.gemini/settings.json, merging with
 // whatever is already there rather than overwriting it. Run by install.sh (via `node
-// merge-settings.js`, with GEMINI_SETTINGS_PATH and AI_INTAKE_MCP_DIR / AI_INTAKE_DOCUMENTATION_MCP_DIR
-// set in its environment),
-// not meant to be run directly.
+// merge-settings.js`, with GEMINI_SETTINGS_PATH and AI_INTAKE_MCP_DIR /
+// AI_INTAKE_DOCUMENTATION_MCP_DIR set in its environment), not meant to be run directly.
 //
 // To add a new MCP server to this toolkit: add an entry to settings.mcpServers below. This used
 // to be embedded as a bash `node -e '...'` single-quoted string in install.sh -- moved to its own
