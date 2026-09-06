@@ -50,6 +50,26 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# ai-intake-mcp / ai-intake-documentation-mcp: baked in at pinned published versions (bump these
+# two ARGs and re-run install.sh to update -- same convention as chrome-devtools-mcp below).
+# `env` (not calling npm directly) is required, not stylistic: npm's own CLI script also resolves
+# `node` via `#!/usr/bin/env node`, so without forcing PATH here it silently installs against the
+# bundled v20 above instead of this v24 runtime (confirmed: `npm warn EBADENGINE ... current: {
+# node: 'v20.20.2' }` without this). `--allow-scripts` is required too, separately: npm 11 skips
+# native-addon install scripts (ai-intake-mcp depends on better-sqlite3 and keytar) unless the
+# package is explicitly allow-listed -- without it the install "succeeds" in seconds but silently
+# leaves the compiled .node binaries missing, which only breaks at runtime once a tool that needs
+# them is actually called, not at startup. This step is the one place that cost is paid -- once,
+# at image-build time -- specifically because better-sqlite3 has no prebuilt binary for Node 24 on
+# any platform yet (checked its GitHub releases directly), so this always compiles from source
+# here (~2 minutes); that's why `make` above matters too (node-gyp needs it, plus the gcc/python3
+# the base image already bundles).
+ARG AI_INTAKE_MCP_VERSION=0.1.1
+ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.2.0
+RUN PATH=/usr/bin:$PATH npm install -g --allow-scripts=better-sqlite3,keytar \
+    @davindermahal/ai-intake-mcp@${AI_INTAKE_MCP_VERSION} \
+    @davindermahal/documentation-mcp@${AI_INTAKE_DOCUMENTATION_MCP_VERSION}
+
 # chrome-devtools-mcp: Chromium's own internal sandbox needs unprivileged user namespaces this
 # container doesn't grant (verified: fails with "No usable sandbox!" even as a non-root user with
 # the default docker run flags used here) -- that's ordinary Docker+Chrome behavior, not specific

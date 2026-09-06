@@ -4,13 +4,15 @@
 # What this does:
 #   1. Checks for prerequisites and warns about environment conflicts from an earlier manual
 #      sandbox setup, if any (stray SANDBOX_FLAGS / GEMINI_SANDBOX_IMAGE etc).
-#   2. Builds the sandbox image (a second Node runtime, Chromium, chrome-devtools-mcp -- no Docker
-#      CLI/daemon access), tagged gemini-sandbox:latest, pinned to your installed CLI's version.
+#   2. Builds the sandbox image (a second Node runtime, Chromium, chrome-devtools-mcp,
+#      ai-intake-mcp, ai-intake-documentation-mcp -- no Docker CLI/daemon access), tagged
+#      gemini-sandbox:latest, pinned to your installed CLI's version.
 #   3. Puts the `gemini-sandbox` wrapper on your PATH via ~/.local/bin.
-#   4. Registers chrome-devtools-mcp (and ai-intake-mcp / ai-intake-documentation-mcp, if env is
-#      configured) in your global ~/.gemini/settings.json -- merged in, existing settings are
-#      preserved. A one-time backup is written to ~/.gemini/settings.json.pre-gemini-sandbox-install
-#      if one doesn't already exist.
+#   4. Registers chrome-devtools-mcp, ai-intake-mcp, and ai-intake-documentation-mcp in your global
+#      ~/.gemini/settings.json -- merged in, existing settings are preserved. A one-time backup is
+#      written to ~/.gemini/settings.json.pre-gemini-sandbox-install if one doesn't already exist.
+#      (ai-intake-mcp / ai-intake-documentation-mcp point at the local clones in env instead, if
+#      you've set AI_INTAKE_MCP_DIR / AI_INTAKE_DOCUMENTATION_MCP_DIR -- see env.example.)
 #
 # Safe to re-run any time (e.g. after editing sandbox.Dockerfile or env, or after a gemini-cli
 # upgrade -- re-running repins the sandbox image to your current CLI version).

@@ -38,14 +38,29 @@ What it does:
    machines on different CLI versions, and after you upgrade `gemini-cli` (just re-run
    `install.sh`).
 3. **Symlinks `bin/gemini-sandbox` into `~/.local/bin`.**
-4. **Registers MCP servers globally** in `~/.gemini/settings.json` — `chrome-devtools-mcp`
-   always, plus `ai-intake-mcp` / `ai-intake-documentation-mcp` if you set their `_DIR` vars in
-   `env` (copy `env.example` to `env` first, or just leave them unset if you don't use those
-   servers). This **merges** into your existing settings rather than overwriting them, and backs
-   up the original once, to `~/.gemini/settings.json.pre-gemini-sandbox-install`, the first time
-   it runs.
+4. **Registers MCP servers globally** in `~/.gemini/settings.json` — `chrome-devtools-mcp`,
+   `ai-intake-mcp`, and `ai-intake-documentation-mcp`, all always on, no configuration needed. This
+   **merges** into your existing settings rather than overwriting them, and backs up the original
+   once, to `~/.gemini/settings.json.pre-gemini-sandbox-install`, the first time it runs.
 
-Safe to re-run any time — every step is idempotent.
+Safe to re-run any time — every step is idempotent. `./install.sh` alone is meant to be
+sufficient — no `env` file, no variables to set, unless you're doing the local-dev override
+described below.
+
+### Updating `ai-intake-mcp` / `ai-intake-documentation-mcp`
+
+Both are baked into the image at pinned versions (`sandbox.Dockerfile`), the same way
+`chrome-devtools-mcp` is. To pick up a new release: publish it from that server's own repo, bump
+the matching `ARG ..._VERSION` near the top of `sandbox.Dockerfile`, then `./install.sh`.
+
+### Local-dev override (iterating on either server without publishing)
+
+Copy `env.example` to `env` and set `AI_INTAKE_MCP_DIR` and/or `AI_INTAKE_DOCUMENTATION_MCP_DIR`
+to a local clone of that server (built once — `npm install && npm run build`). When set, the
+wrapper bind-mounts your clone into the sandbox read-only and registers that in place of the
+baked-in image version. From then on, `git pull && npm run build` in the clone before a test run
+picks up new commits with no publish and no image rebuild — just re-run `./install.sh` once after
+first setting the variable, to switch the registration over.
 
 ## Use
 
@@ -100,13 +115,13 @@ git pull
 ## Files
 
 - `sandbox.Dockerfile` — the image: `make` plus a second Node runtime for MCP servers needing a
-  newer version than the sandbox's bundled one, Chromium + `chrome-devtools-mcp`. No Docker
+  newer version than the sandbox's bundled one, Chromium + `chrome-devtools-mcp`, and
+  `ai-intake-mcp` + `ai-intake-documentation-mcp` at pinned published versions. No Docker
   CLI/daemon access — nothing inside the sandbox can reach the host's Docker daemon.
 - `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`, and
-  `SANDBOX_MOUNTS` (`ai-intake-mcp` / `ai-intake-documentation-mcp` if configured, plus an admin
-  policy dir if present, and nothing else — deliberately no docker.sock mount), then execs
-  `gemini`.
+  `SANDBOX_MOUNTS` (only ever non-empty for the local-dev override or an admin policy dir, if
+  present — deliberately no docker.sock mount), then execs `gemini`.
 - `env.example` / `env` (gitignored, per-machine) — `AI_INTAKE_MCP_DIR` and
-  `AI_INTAKE_DOCUMENTATION_MCP_DIR`.
+  `AI_INTAKE_DOCUMENTATION_MCP_DIR`, the local-dev override described above. Optional.
 - `install.sh` — checks prerequisites and environment, builds the image, and wires everything
   above into place.

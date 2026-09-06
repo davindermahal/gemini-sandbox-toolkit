@@ -36,12 +36,12 @@ if [[ -f "$HOME/.gemini/settings.json" ]]; then
     for (const [name, cfg] of Object.entries(servers)) {
       console.log(`  ${name}:`, JSON.stringify(cfg));
     }
-    // install.sh always writes ai-intake as {command: "/usr/bin/node", args: [<AI_INTAKE_MCP_DIR>/dist/index.js]}
-    // -- anything else here was NOT written by this toolkit (a pre-existing registration from
-    // before it ran, most likely) and install.sh will never touch it unless AI_INTAKE_MCP_DIR is
-    // set to a directory that actually exists, by design (it never overwrites a server it is not
-    // configured to manage). Flag the mismatch explicitly rather than leaving it to be noticed by
-    // diffing JSON by eye.
+    // install.sh always writes ai-intake as {command: "/usr/bin/node", args: [...]} -- either the
+    // baked-in image path (default) or <AI_INTAKE_MCP_DIR>/dist/index.js (if that env var is set,
+    // the local-dev override). Anything else here was NOT written by this toolkit (a pre-existing
+    // registration from before it ran, most likely), and install.sh will never touch a server it
+    // is not configured to manage. Flag the mismatch explicitly rather than leaving it to be
+    // noticed by diffing JSON by eye.
     const ai = servers["ai-intake"];
     const expectedDir = process.env.AI_INTAKE_MCP_DIR;
     if (ai && ai.command !== "/usr/bin/node") {
@@ -50,9 +50,12 @@ if [[ -f "$HOME/.gemini/settings.json" ]]; then
       console.log("         registration from before it ran). Bare \"node\" resolves inside the sandbox to");
       console.log("         the bundled ~v20 Node, not the NodeSource v24 install -- if ai-intake-mcp needs");
       console.log("         >=24 (native addon ABI mismatch), this crashes on startup: \"Connection closed\".");
-      console.log("         Fix: set AI_INTAKE_MCP_DIR in " + process.argv[2] + " to a real, existing path,");
-      console.log("         then re-run ./install.sh -- it will then overwrite this entry correctly.");
-    } else if (ai && expectedDir && !ai.args[0].startsWith(expectedDir)) {
+      console.log("         Fix: re-run ./install.sh -- it will then overwrite this entry correctly.");
+    } else if (ai && expectedDir && require("fs").existsSync(expectedDir) && !ai.args[0].startsWith(expectedDir)) {
+      // Only warn if expectedDir actually exists on disk -- a fresh env file still has
+      // AI_INTAKE_MCP_DIR set to env.example\x27s unedited placeholder value, which is set but not
+      // real. merge-settings.js already gates its override the same way (existsSync), so this
+      // check needs the identical gate or it warns about a mismatch that was never going to happen.
       console.log("  [WARN] ai-intake args path (" + ai.args[0] + ") does not match this host\x27s");
       console.log("         AI_INTAKE_MCP_DIR (" + expectedDir + ") -- re-run ./install.sh to sync it.");
     }
@@ -78,9 +81,39 @@ else
 fi
 
 echo ""
-echo "==> ai-intake-mcp: launch + MCP initialize handshake, inside the actual image"
+echo "==> ai-intake-mcp: baked-in image install, launch + MCP initialize handshake"
+NODE_PKG=/usr/local/share/npm-global/lib/node_modules/@davindermahal/ai-intake-mcp/dist/index.js
+OUT="$(docker run --rm --entrypoint sh "$IMAGE" -c "
+  test -f '$NODE_PKG' || { echo BINARY_MISSING -- rebuild the image: ./install.sh; exit 1; }
+  echo '$HANDSHAKE' | timeout 15 /usr/bin/node '$NODE_PKG'
+  echo EXIT_CODE:\$?
+" 2>&1)"
+if echo "$OUT" | grep -q '"serverInfo"'; then
+  pass "responded correctly"
+else
+  fail "did not respond with a valid MCP handshake. Full output:"
+  echo "$OUT" | sed 's/^/    /'
+fi
+
+echo ""
+echo "==> ai-intake-documentation-mcp: baked-in image install, launch + MCP initialize handshake"
+NODE_PKG=/usr/local/share/npm-global/lib/node_modules/@davindermahal/documentation-mcp/dist/index.js
+OUT="$(docker run --rm --entrypoint sh "$IMAGE" -c "
+  test -f '$NODE_PKG' || { echo BINARY_MISSING -- rebuild the image: ./install.sh; exit 1; }
+  echo '$HANDSHAKE' | timeout 15 /usr/bin/node '$NODE_PKG'
+  echo EXIT_CODE:\$?
+" 2>&1)"
+if echo "$OUT" | grep -q '"serverInfo"'; then
+  pass "responded correctly"
+else
+  fail "did not respond with a valid MCP handshake. Full output:"
+  echo "$OUT" | sed 's/^/    /'
+fi
+
+echo ""
+echo "==> ai-intake-mcp: local-dev override (AI_INTAKE_MCP_DIR), if set -- launch + MCP handshake"
 if [[ -z "${AI_INTAKE_MCP_DIR:-}" ]]; then
-  echo "  (skipped -- AI_INTAKE_MCP_DIR not set in $ENV_FILE)"
+  echo "  (skipped -- AI_INTAKE_MCP_DIR not set in $ENV_FILE; baked-in image install checked above)"
 elif [[ ! -d "$AI_INTAKE_MCP_DIR" ]]; then
   fail "AI_INTAKE_MCP_DIR=$AI_INTAKE_MCP_DIR does not exist on this host"
 else
@@ -101,9 +134,9 @@ else
 fi
 
 echo ""
-echo "==> ai-intake-documentation-mcp: launch + MCP initialize handshake, inside the actual image"
+echo "==> ai-intake-documentation-mcp: local-dev override (AI_INTAKE_DOCUMENTATION_MCP_DIR), if set"
 if [[ -z "${AI_INTAKE_DOCUMENTATION_MCP_DIR:-}" ]]; then
-  echo "  (skipped -- AI_INTAKE_DOCUMENTATION_MCP_DIR not set in $ENV_FILE)"
+  echo "  (skipped -- AI_INTAKE_DOCUMENTATION_MCP_DIR not set in $ENV_FILE; baked-in image install checked above)"
 elif [[ ! -d "$AI_INTAKE_DOCUMENTATION_MCP_DIR" ]]; then
   fail "AI_INTAKE_DOCUMENTATION_MCP_DIR=$AI_INTAKE_DOCUMENTATION_MCP_DIR does not exist on this host"
 else

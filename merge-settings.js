@@ -40,17 +40,29 @@ settings.mcpServers["chrome-devtools"] = {
   ],
 };
 
-// Conditional: only registered if AI_INTAKE_MCP_DIR is set and actually exists on this host (see
-// env.example) -- never overwrites this entry otherwise, even if something else already
-// registered "ai-intake" (e.g. that server's own setup docs, run directly against the host).
+// Always registered, at the pinned versions baked into sandbox.Dockerfile (npm install -g
+// --allow-scripts=better-sqlite3,keytar @davindermahal/ai-intake-mcp@<ver> ...). command MUST be
+// the absolute path "/usr/bin/node" (never bare "node") -- see sandbox.Dockerfile's comment on
+// the two Node runtimes for why bare "node" silently resolves to the wrong, older one and breaks
+// native addons.
+settings.mcpServers["ai-intake"] = {
+  command: "/usr/bin/node",
+  args: ["/usr/local/share/npm-global/lib/node_modules/@davindermahal/ai-intake-mcp/dist/index.js"],
+};
+settings.mcpServers["ai-intake-documentation"] = {
+  command: "/usr/bin/node",
+  args: ["/usr/local/share/npm-global/lib/node_modules/@davindermahal/documentation-mcp/dist/index.js"],
+};
+
+// Local-dev override: only takes effect if the corresponding _DIR env var is set and actually
+// exists on this host (see env.example) -- lets you iterate on either server (git pull + npm
+// build in your own clone) without publishing a new version and rebuilding the image each time.
+// When set, this REPLACES the baked-in entry above with one pointing at your local build instead.
 //
 // TEMPLATE FOR ADDING ANOTHER SERVER WITH LOCAL STATE (e.g. cloned from GitHub): copy this block.
-// command MUST be the absolute path "/usr/bin/node" if the server's package.json `engines` needs
-// Node >=24 (never bare "node" -- see sandbox.Dockerfile's comment on the two Node runtimes for
-// why bare "node" silently resolves to the wrong, older one and breaks native addons). args[0]
-// should be the in-container path to its built entry point -- identical to the host path here,
-// since bin/gemini-sandbox bind-mounts it at that same absolute path (SANDBOX_MOUNTS), not a
-// separate in-image copy.
+// args[0] should be the in-container path to its built entry point -- identical to the host path
+// here, since bin/gemini-sandbox bind-mounts it at that same absolute path (SANDBOX_MOUNTS), not
+// a separate in-image copy.
 const aiIntakeDir = process.env.AI_INTAKE_MCP_DIR;
 if (aiIntakeDir && fs.existsSync(aiIntakeDir)) {
   settings.mcpServers["ai-intake"] = {
@@ -59,10 +71,10 @@ if (aiIntakeDir && fs.existsSync(aiIntakeDir)) {
   };
 }
 
-// Same convention, applied: an npm-workspaces monorepo, so its built server lives one level
-// deeper than the checkout root -- packages/documentation-mcp/dist/index.js, produced by `npm
-// install && npm run build` at the repo root (workspaces get symlinked and built together; no
-// npm-registry publish of the internal @davindermahal/context-schema dependency required).
+// Same override, applied: an npm-workspaces monorepo, so its built server lives one level deeper
+// than the checkout root -- packages/documentation-mcp/dist/index.js, produced by `npm install &&
+// npm run build` at the repo root (workspaces get symlinked and built together; no npm-registry
+// publish of the internal @davindermahal/context-schema dependency required).
 const aiIntakeDocsDir = process.env.AI_INTAKE_DOCUMENTATION_MCP_DIR;
 if (aiIntakeDocsDir && fs.existsSync(aiIntakeDocsDir)) {
   settings.mcpServers["ai-intake-documentation"] = {
