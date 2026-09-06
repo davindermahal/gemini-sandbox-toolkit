@@ -4,8 +4,8 @@
 # What this does:
 #   1. Checks for prerequisites and warns about environment conflicts from an earlier manual
 #      sandbox setup, if any (stray SANDBOX_FLAGS / GEMINI_SANDBOX_IMAGE etc).
-#   2. Builds the sandbox image (docker CLI + compose, a second Node runtime, Chromium,
-#      chrome-devtools-mcp), tagged gemini-sandbox:latest, pinned to your installed CLI's version.
+#   2. Builds the sandbox image (a second Node runtime, Chromium, chrome-devtools-mcp -- no Docker
+#      CLI/daemon access), tagged gemini-sandbox:latest, pinned to your installed CLI's version.
 #   3. Puts the `gemini-sandbox` wrapper on your PATH via ~/.local/bin.
 #   4. Registers chrome-devtools-mcp (and ai-intake-mcp, if env is configured) in your global
 #      ~/.gemini/settings.json -- merged in, existing settings are preserved. A one-time backup
@@ -25,7 +25,7 @@ GEMINI_SETTINGS="$HOME/.gemini/settings.json"
 
 # --- 1. Prerequisites ------------------------------------------------------------------------
 missing=()
-for cmd in docker node gemini getent; do
+for cmd in docker node gemini; do
   command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
 done
 if [[ ${#missing[@]} -gt 0 ]]; then
@@ -41,16 +41,16 @@ fi
 
 # --- 2. Environment conflict check ------------------------------------------------------------
 # Previously-hit failure modes, all from an EARLIER manual sandbox setup attempt still lingering
-# somewhere: a stray SANDBOX_FLAGS with its own docker.sock mount collides with this wrapper's own
-# (Docker's "Duplicate mount point" error); a stray GEMINI_SANDBOX_IMAGE points at a different,
-# older image (this wrapper overrides it for its OWN invocations, but plain `gemini` with
-# GEMINI_SANDBOX also set from an rc file would silently use the stale image instead); and
-# DOCKER_HOST/DOCKER_CONTEXT/DOCKER_BUILDKIT/BUILDX_BUILDER can point `docker build` itself at a
-# different daemon, context, or builder than expected -- worth surfacing even though this toolkit
-# doesn't use any of them, since a stale one from an earlier attempt can make `docker build`
-# behave in ways that look like a bug in this script but aren't. This script can't unset variables
-# in the shell that invoked it (a subprocess can't reach back into its parent's environment) or in
-# rc files it hasn't been told to edit -- so it reports what it finds instead of guessing.
+# somewhere: a stray SANDBOX_FLAGS or SANDBOX_MOUNTS collides with this wrapper's own; a stray
+# GEMINI_SANDBOX_IMAGE points at a different, older image (this wrapper overrides it for its OWN
+# invocations, but plain `gemini` with GEMINI_SANDBOX also set from an rc file would silently use
+# the stale image instead); and DOCKER_HOST/DOCKER_CONTEXT/DOCKER_BUILDKIT/BUILDX_BUILDER can point
+# `docker build` itself at a different daemon, context, or builder than expected -- worth surfacing
+# even though this toolkit doesn't use any of them, since a stale one from an earlier attempt can
+# make `docker build` behave in ways that look like a bug in this script but aren't. This script
+# can't unset variables in the shell that invoked it (a subprocess can't reach back into its
+# parent's environment) or in rc files it hasn't been told to edit -- so it reports what it finds
+# instead of guessing.
 echo "==> Checking for conflicting environment from an earlier manual sandbox setup"
 conflict_vars=(GEMINI_SANDBOX GEMINI_SANDBOX_IMAGE SANDBOX_MOUNTS SANDBOX_FLAGS DOCKER_HOST DOCKER_CONTEXT DOCKER_BUILDKIT BUILDX_BUILDER)
 found_any=0
@@ -74,13 +74,12 @@ if [[ ${#rc_hits[@]} -gt 0 ]]; then
 fi
 if [[ "$found_any" -eq 1 ]]; then
   echo "    This toolkit's wrapper (bin/gemini-sandbox) sets GEMINI_SANDBOX, GEMINI_SANDBOX_IMAGE,"
-  echo "    and SANDBOX_MOUNTS itself on every run -- lines above won't break \`gemini-sandbox\`"
-  echo "    specifically, but SANDBOX_FLAGS can still collide with its docker.sock mount, a stale"
-  echo "    DOCKER_HOST/DOCKER_CONTEXT/BUILDX_BUILDER can point \`docker build\` at an unexpected"
-  echo "    daemon or builder, and any of these left exported will affect plain \`gemini\`/\`docker\`"
-  echo "    generally. Recommended: remove the export lines above from your rc file(s) and open a"
-  echo "    fresh shell -- editing a rc file alone doesn't unset a variable already exported in"
-  echo "    your CURRENT shell."
+  echo "    SANDBOX_MOUNTS, and SANDBOX_FLAGS itself on every run -- lines above won't break"
+  echo "    \`gemini-sandbox\` specifically, but a stale DOCKER_HOST/DOCKER_CONTEXT/BUILDX_BUILDER"
+  echo "    can point \`docker build\` at an unexpected daemon or builder, and any of these left"
+  echo "    exported will affect plain \`gemini\`/\`docker\` generally. Recommended: remove the export"
+  echo "    lines above from your rc file(s) and open a fresh shell -- editing a rc file alone"
+  echo "    doesn't unset a variable already exported in your CURRENT shell."
 else
   echo "    none found -- clean."
 fi
@@ -99,11 +98,9 @@ echo "==> Building gemini-sandbox:latest (base image pinned to your gemini-cli v
 # different fixes attempting to work around that path-resolution behavior both failed). Piping the
 # Dockerfile via stdin removes BuildKit's context-relative dockerfile lookup from the equation
 # entirely, rather than trying to satisfy whatever that lookup wants on every BuildKit version.
-DOCKER_GID_VAL="$(getent group docker | cut -d: -f3)"
 echo "    dockerfile: $TOOLKIT_DIR/sandbox.Dockerfile (piped via stdin, no separate build context needed)"
 set -x
 docker build \
-  --build-arg DOCKER_GID="$DOCKER_GID_VAL" \
   --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
   -t gemini-sandbox:latest \
   - < "$TOOLKIT_DIR/sandbox.Dockerfile"

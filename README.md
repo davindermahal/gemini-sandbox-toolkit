@@ -10,9 +10,11 @@ Full background and the source-cited reasoning behind every decision here:
 
 ## Requirements
 
-Docker (running, and your user in the `docker` group), Node.js, and `gemini-cli` already
-installed (`npm install -g @google/gemini-cli`). `install.sh` checks for all of these up front and
-exits with a clear message if any are missing, rather than failing partway through.
+Docker (running, and your user in the `docker` group — needed to build the sandbox image; the
+sandbox itself does not get access to the host's Docker daemon, see below), Node.js, and
+`gemini-cli` already installed (`npm install -g @google/gemini-cli`). `install.sh` checks for all
+of these up front and exits with a clear message if any are missing, rather than failing partway
+through.
 
 ## Install
 
@@ -26,12 +28,11 @@ What it does:
 
 1. **Checks for a conflicting environment first.** If you've tried setting up a Gemini sandbox by
    hand before (on this machine or another), you may have `GEMINI_SANDBOX_IMAGE`,
-   `SANDBOX_FLAGS`, etc. exported somewhere — a stray `SANDBOX_FLAGS` with its own docker.sock
-   mount will collide with this toolkit's own mount (Docker's "Duplicate mount point" error), and
-   a stray `GEMINI_SANDBOX_IMAGE` will make plain `gemini` (with `GEMINI_SANDBOX` also set from an
-   old rc file) silently use an old image instead of this one. The installer reports both the
-   currently-exported environment and matching `export` lines in your shell rc files — it doesn't
-   edit them for you, just tells you what to remove.
+   `SANDBOX_FLAGS`, etc. exported somewhere — a stray one of these will collide with this
+   toolkit's own, and a stray `GEMINI_SANDBOX_IMAGE` will make plain `gemini` (with
+   `GEMINI_SANDBOX` also set from an old rc file) silently use an old image instead of this one.
+   The installer reports both the currently-exported environment and matching `export` lines in
+   your shell rc files — it doesn't edit them for you, just tells you what to remove.
 2. **Builds the image** (`gemini-sandbox:latest`), pinned to *your* installed `gemini-cli`
    version automatically (`gemini --version`) — not hardcoded, so this works correctly across
    machines on different CLI versions, and after you upgrade `gemini-cli` (just re-run
@@ -97,13 +98,12 @@ git pull
 
 ## Files
 
-- `sandbox.Dockerfile` — the image: Docker CLI + compose plugin (for Docker-outside-of-Docker),
-  a second Node runtime for MCP servers needing a newer version than the sandbox's bundled one,
-  Chromium + `chrome-devtools-mcp`.
-- `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`,
-  `SANDBOX_MOUNTS` (docker.sock, plus `ai-intake-mcp` if configured), and `SANDBOX_FLAGS`
-  (`--group-add` for docker.sock's actual GID on this host, so the image works even on a host
-  whose docker group GID differs from the one baked in at build time), then execs `gemini`.
+- `sandbox.Dockerfile` — the image: `make` plus a second Node runtime for MCP servers needing a
+  newer version than the sandbox's bundled one, Chromium + `chrome-devtools-mcp`. No Docker
+  CLI/daemon access — nothing inside the sandbox can reach the host's Docker daemon.
+- `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`, and
+  `SANDBOX_MOUNTS` (`ai-intake-mcp` if configured, plus an admin policy dir if present, and nothing
+  else — deliberately no docker.sock mount), then execs `gemini`.
 - `env.example` / `env` (gitignored, per-machine) — currently just `AI_INTAKE_MCP_DIR`.
 - `install.sh` — checks prerequisites and environment, builds the image, and wires everything
   above into place.

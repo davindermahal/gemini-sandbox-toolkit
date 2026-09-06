@@ -20,13 +20,11 @@ set -euo pipefail
 TOOLKIT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 
 # This script owns SANDBOX_MOUNTS and SANDBOX_FLAGS entirely (both built fresh below) rather than
-# trusting whatever's already exported -- a stray SANDBOX_FLAGS left over from an earlier manual
-# setup attempt (e.g. its own docker.sock volume flag) would silently combine with this script's
-# own docker.sock mount and fail with Docker's "Duplicate mount point" error. Note that editing
-# .bashrc to remove an old export and re-sourcing it does NOT unset a variable already exported in
-# the current shell -- only `unset` or a fresh shell does. Assigning fresh below (rather than
-# unsetting) discards any such stray value the same way, but also lets this script populate
-# SANDBOX_FLAGS with its own value -- see the docker-group alignment below.
+# trusting whatever's already exported -- a stray SANDBOX_FLAGS or SANDBOX_MOUNTS left over from an
+# earlier manual setup attempt would otherwise silently combine with this script's own. Note that
+# editing .bashrc to remove an old export and re-sourcing it does NOT unset a variable already
+# exported in the current shell -- only `unset` or a fresh shell does. Assigning fresh below
+# (rather than unsetting) discards any such stray value the same way.
 
 ENV_FILE="$TOOLKIT_DIR/env"
 if [[ -f "$ENV_FILE" ]]; then
@@ -43,27 +41,19 @@ fi
 export GEMINI_SANDBOX=docker
 export GEMINI_SANDBOX_IMAGE=gemini-sandbox:latest
 
-# docker.sock must be explicit :rw -- SANDBOX_MOUNTS defaults an omitted mode to :ro, which would
-# leave the sandboxed `docker` CLI unable to issue commands over the socket.
-DOCKER_SOCK="/var/run/docker.sock"
-SANDBOX_MOUNTS="$DOCKER_SOCK:$DOCKER_SOCK:rw"
-
-# The sandboxed `node` user needs to be in a group matching docker.sock's GID to use it (it has no
-# sudo inside the sandbox to fix this itself). sandbox.Dockerfile bakes a DOCKER_GID build-arg into
-# the image's `docker` group at build time (from install.sh's `getent group docker`) -- but that
-# only matches *this* host if the image was also built on this host. Confirmed broken on a second
-# host whose docker.sock GID didn't match: node's group membership from the image was simply
-# wrong there, with no way to fix it from inside the container. --group-add here joins the
-# container to docker.sock's *actual* GID on whatever host is running it right now, independent of
-# what got baked in at build time -- so one image works across hosts with different docker GIDs,
-# and keeps working if a host's docker GID changes later (e.g. Docker reinstalled). The Dockerfile's
-# build-time groupmod stays as a fallback (e.g. for images built before this existed).
-DOCKER_SOCK_GID="$(stat -c '%g' "$DOCKER_SOCK" 2>/dev/null || stat -f '%g' "$DOCKER_SOCK" 2>/dev/null || true)"
-if [[ -n "$DOCKER_SOCK_GID" ]]; then
-  export SANDBOX_FLAGS="--group-add $DOCKER_SOCK_GID"
-else
-  unset SANDBOX_FLAGS
-fi
+# No docker.sock mount here, deliberately: the sandbox does not get access to the host's Docker
+# daemon (that would let anything running inside the sandbox control Docker on the host, i.e.
+# root-equivalent access). SANDBOX_MOUNTS is built up from scratch below, comma-separated, with no
+# entry unless something is actually configured.
+SANDBOX_MOUNTS=""
+unset SANDBOX_FLAGS
+add_mount() {
+  if [[ -z "$SANDBOX_MOUNTS" ]]; then
+    SANDBOX_MOUNTS="$1"
+  else
+    SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$1"
+  fi
+}
 
 # ai-intake-mcp, if configured (env.example): bind-mounted read-only at its real host path rather
 # than baked into the image -- it must run as a plain `node` child process sharing the sandboxed
@@ -72,9 +62,9 @@ fi
 # without it.
 if [[ -n "${AI_INTAKE_MCP_DIR:-}" && -d "$AI_INTAKE_MCP_DIR" ]]; then
   AI_INTAKE_MCP_CONFIG_DIR="$HOME/.config/ai-intake-mcp"
-  SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$AI_INTAKE_MCP_DIR:$AI_INTAKE_MCP_DIR:ro"
+  add_mount "$AI_INTAKE_MCP_DIR:$AI_INTAKE_MCP_DIR:ro"
   if [[ -d "$AI_INTAKE_MCP_CONFIG_DIR" ]]; then
-    SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$AI_INTAKE_MCP_CONFIG_DIR:$AI_INTAKE_MCP_CONFIG_DIR:ro"
+    add_mount "$AI_INTAKE_MCP_CONFIG_DIR:$AI_INTAKE_MCP_CONFIG_DIR:ro"
   fi
 fi
 
@@ -85,9 +75,13 @@ fi
 # GOOGLE_APPLICATION_CREDENTIALS).
 ADMIN_POLICY_DIR="/etc/gemini-cli/policies"
 if [[ -d "$ADMIN_POLICY_DIR" ]]; then
-  SANDBOX_MOUNTS="$SANDBOX_MOUNTS,$ADMIN_POLICY_DIR:$ADMIN_POLICY_DIR:ro"
+  add_mount "$ADMIN_POLICY_DIR:$ADMIN_POLICY_DIR:ro"
 fi
 
-export SANDBOX_MOUNTS
+if [[ -n "$SANDBOX_MOUNTS" ]]; then
+  export SANDBOX_MOUNTS
+else
+  unset SANDBOX_MOUNTS
+fi
 
 exec gemini "$@"

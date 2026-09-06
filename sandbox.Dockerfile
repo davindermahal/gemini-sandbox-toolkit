@@ -19,22 +19,14 @@ FROM us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:${GEMINI_CLI_VERSION}
 
 USER root
 
-# docker-ce-cli + docker-compose-plugin (from Docker's own apt repo -- Debian's bookworm repos
-# don't carry a docker-compose-v2 package): lets `make`/`docker compose` run *inside* the sandbox,
-# reaching the host's Docker daemon over the bind-mounted socket (Docker-outside-of-Docker) -- no
-# Docker engine runs in this image, only the client + compose plugin.
+# No Docker CLI/daemon access in this image, deliberately -- the sandbox does not get the host's
+# docker.sock bind-mounted in (see bin/gemini-sandbox), so a Docker client here would have nothing
+# to talk to anyway. `make` stays for build/test targets that don't need Docker; curl +
+# ca-certificates are needed below to install the second Node runtime via NodeSource.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         make \
         curl \
         ca-certificates \
-        gnupg \
-    && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
-    && chmod a+r /etc/apt/keyrings/docker.asc \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
-        > /etc/apt/sources.list.d/docker.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
 # The base image bundles its own Node (older, used internally by the gemini-cli binary re-exec'd
@@ -45,14 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
-
-# Align this image's `docker` group GID with the host's so the base image's non-root `node` user
-# can use the bind-mounted docker.sock (group-owned, not world-writable). Override at build time
-# if the host's GID differs -- check with `getent group docker`. install.sh passes this
-# automatically.
-ARG DOCKER_GID=984
-RUN groupmod -g ${DOCKER_GID} docker 2>/dev/null || groupadd -g ${DOCKER_GID} docker
-RUN usermod -aG docker node
 
 # chrome-devtools-mcp: Chromium's own internal sandbox needs unprivileged user namespaces this
 # container doesn't grant (verified: fails with "No usable sandbox!" even as a non-root user with
