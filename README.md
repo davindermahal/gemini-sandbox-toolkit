@@ -11,7 +11,9 @@ Full background and the source-cited reasoning behind every decision here:
 ## Requirements
 
 Docker (running, and your user in the `docker` group — needed to build the sandbox image; the
-sandbox itself does not get access to the host's Docker daemon, see below), Node.js, and
+sandbox itself does not get access to the host's Docker daemon, see
+[Docker access for your project's own containers](#docker-access-for-your-projects-own-containers)),
+Node.js, and
 `gemini-cli` already installed (`npm install -g @google/gemini-cli`). `install.sh` checks for all
 of these up front and exits with a clear message if any are missing, rather than failing partway
 through.
@@ -73,6 +75,34 @@ gemini-sandbox -s -p "run make unit-test"
 Plain `gemini` (no wrapper) stays unsandboxed — `gemini-sandbox` is the opt-in, not a global
 default. Gemini auto-mounts whatever directory you run it from, so this same command works
 against any project without any per-project setup.
+
+## Docker access for your project's own containers
+
+The sandbox deliberately has no Docker CLI and no `docker.sock` mount — see "Files" below and
+[davindermahal/gemini-sandbox](https://github.com/davindermahal/gemini-sandbox)'s
+`.ai/guides/gemini-docker-sandbox-mcp.md` (Section 0) for the full reasoning: a bind-mounted
+`docker.sock` is root-equivalent host access, and because this sandbox is one shared container per
+session rather than scoped per-tool, giving it Docker access would hand that same access to
+whatever native shell command the model decides to run directly, not just to an MCP server's
+vetted targets. That's not a limitation to work around — it's the same reasoning that makes the
+sandbox worth using at all.
+
+**If your project's own `make` targets need to drive Docker** (`make up`, `make test`, `make
+composer {ARGS}`, etc.), the correct pattern is: run an MCP server that talks to Docker as its own
+process *outside* this sandbox — normal host-level access, nothing special — and register it with
+the sandboxed `gemini` session as an **HTTP**-type MCP server (not the `stdio` `command`/`args`
+shape every server in this toolkit currently uses), pointed at
+`http://host.docker.internal:<port>/mcp` — reachable automatically, no extra `SANDBOX_MOUNTS` or
+network config needed (Gemini's sandbox auto-maps that hostname to the host).
+
+[`make-runner-mcp`](https://github.com/davindermahal/make-runner-mcp) v2.0.0+ is a working
+reference implementation of exactly this — it defaults to this HTTP mode specifically because of
+this finding, with a required bearer-token auth (the server refuses to start unauthenticated).
+Verified end-to-end against `gemini-sandbox`'s own demo app, through this toolkit's actual hardened
+image: real Docker-driven `make` targets ran correctly through the MCP tool, while the same
+sandboxed session's native shell tool had zero Docker access of its own. Not currently baked into
+this toolkit's own `install.sh`/`merge-settings.js` (those register `stdio` servers only) — set up
+separately, per project, following `make-runner-mcp`'s own README.
 
 ## Troubleshooting
 
