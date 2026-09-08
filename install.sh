@@ -124,9 +124,10 @@ fi
 
 # --- 5. Install the make-runner-mcp lifecycle commands -------------------------------------------
 # Prefixed gemini-sandbox-mcp-* (not bare mcp-up/down/status like the single-project reference in
-# davindermahal/gemini-sandbox) because these get installed onto the user's global PATH -- a bare
-# name would squat a much more generic, collision-prone slot than a project-relative ./bin/mcp-up
-# ever would. Just symlinks, same idempotent pattern as gemini-sandbox itself above -- there is
+# davindermahal/gemini-sandbox-toolkit-demo) because these get installed onto the user's global
+# PATH -- a bare name would squat a much more generic, collision-prone slot than a
+# project-relative ./bin/mcp-up ever would. Just symlinks, same idempotent pattern as
+# gemini-sandbox itself above -- there is
 # nothing to merge into the global settings.json here (unlike chrome-devtools/ai-intake below),
 # since make-runner-mcp is a per-project, explicit-opt-in thing whose registration happens inside
 # bin/gemini-sandbox itself, dynamically, per project directory -- see mcp-runner-lib.sh.

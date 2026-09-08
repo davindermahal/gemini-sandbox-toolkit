@@ -5,8 +5,9 @@ one wrapper command, one set of MCP server registrations, instead of copying san
 every repo.
 
 Full background and the source-cited reasoning behind every decision here:
-[davindermahal/gemini-sandbox](https://github.com/davindermahal/gemini-sandbox), particularly
-`.ai/guides/gemini-docker-sandbox-mcp.md` Section 6.
+[davindermahal/gemini-sandbox-toolkit-demo](https://github.com/davindermahal/gemini-sandbox-toolkit-demo)
+(a demo project that exists purely to test this toolkit against something real — not a dependency
+of the toolkit), particularly `.ai/guides/gemini-docker-sandbox-mcp.md` Section 6.
 
 ## Requirements
 
@@ -79,7 +80,7 @@ against any project without any per-project setup.
 ## Docker access for your project's own containers
 
 The sandbox deliberately has no Docker CLI and no `docker.sock` mount — see "Files" below and
-[davindermahal/gemini-sandbox](https://github.com/davindermahal/gemini-sandbox)'s
+[davindermahal/gemini-sandbox-toolkit-demo](https://github.com/davindermahal/gemini-sandbox-toolkit-demo)'s
 `.ai/guides/gemini-docker-sandbox-mcp.md` (Section 0) for the full reasoning: a bind-mounted
 `docker.sock` is root-equivalent host access, and because this sandbox is one shared container per
 session rather than scoped per-tool, giving it Docker access would hand that same access to
