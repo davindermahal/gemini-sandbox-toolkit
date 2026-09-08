@@ -98,11 +98,21 @@ network config needed (Gemini's sandbox auto-maps that hostname to the host).
 [`make-runner-mcp`](https://github.com/davindermahal/make-runner-mcp) v2.0.0+ is a working
 reference implementation of exactly this — it defaults to this HTTP mode specifically because of
 this finding, with a required bearer-token auth (the server refuses to start unauthenticated).
-Verified end-to-end against `gemini-sandbox`'s own demo app, through this toolkit's actual hardened
-image: real Docker-driven `make` targets ran correctly through the MCP tool, while the same
-sandboxed session's native shell tool had zero Docker access of its own. Not currently baked into
-this toolkit's own `install.sh`/`merge-settings.js` (those register `stdio` servers only) — set up
-separately, per project, following `make-runner-mcp`'s own README.
+
+**Wired in and working, not just theoretical**: [`davindermahal/gemini-sandbox`](https://github.com/davindermahal/gemini-sandbox)
+exists specifically to test this toolkit against a real project, and its `bin/mcp-up` /
+`bin/mcp-down` / `bin/mcp-status` (also reachable as `make mcp-up` etc. there) are a complete,
+verified reference for wiring this into any project that uses this toolkit — per-developer token
+generation, process lifecycle management (including two real bugs found and fixed by actually
+running it repeatedly: `npx`-launched processes need process-group tracking, not `$!`, and
+"started" needs to mean the port is actually accepting connections, not just that a process
+exists — see that repo's `.ai/system.md` for the full detail), and the `makeRunner` entry in
+`.gemini/settings.json.tmpl`. Copy that pattern into your own project's `.gemini/` directory and
+`Makefile`. Not currently baked into this toolkit's own `install.sh`/`merge-settings.js` (those
+register global, always-on `stdio` servers — `ai-intake-mcp`, `chrome-devtools-mcp` — spawned
+fresh inside each sandbox session; `make-runner-mcp` is architecturally different, a persistent
+per-project process with its own port and token, which is why it's a per-project setup rather than
+a global toolkit registration).
 
 ## Troubleshooting
 
