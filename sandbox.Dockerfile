@@ -64,8 +64,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # any platform yet (checked its GitHub releases directly), so this always compiles from source
 # here (~2 minutes); that's why `make` above matters too (node-gyp needs it, plus the gcc/python3
 # the base image already bundles).
-ARG AI_INTAKE_MCP_VERSION=0.1.1
-ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.2.0
+ARG AI_INTAKE_MCP_VERSION=0.2.0
+ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.3.0
 RUN PATH=/usr/bin:$PATH npm install -g --allow-scripts=better-sqlite3,keytar \
     @davindermahal/ai-intake-mcp@${AI_INTAKE_MCP_VERSION} \
     @davindermahal/documentation-mcp@${AI_INTAKE_DOCUMENTATION_MCP_VERSION}
