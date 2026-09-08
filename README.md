@@ -87,32 +87,45 @@ whatever native shell command the model decides to run directly, not just to an 
 vetted targets. That's not a limitation to work around — it's the same reasoning that makes the
 sandbox worth using at all.
 
-**If your project's own `make` targets need to drive Docker** (`make up`, `make test`, `make
-composer {ARGS}`, etc.), the correct pattern is: run an MCP server that talks to Docker as its own
-process *outside* this sandbox — normal host-level access, nothing special — and register it with
-the sandboxed `gemini` session as an **HTTP**-type MCP server (not the `stdio` `command`/`args`
-shape every server in this toolkit currently uses), pointed at
-`http://host.docker.internal:<port>/mcp` — reachable automatically, no extra `SANDBOX_MOUNTS` or
-network config needed (Gemini's sandbox auto-maps that hostname to the host).
+**Built into this toolkit**, not something you wire up by hand: [`make-runner-mcp`](https://github.com/davindermahal/make-runner-mcp)
+v2.0.0+ runs as its own process *outside* the sandbox — normal host-level Docker access, nothing
+special — reached by the sandboxed session only over the network at
+`http://host.docker.internal:<port>/mcp`, with a required bearer-token auth (it refuses to start
+unauthenticated). `install.sh` puts three commands on your `PATH` for this:
 
-[`make-runner-mcp`](https://github.com/davindermahal/make-runner-mcp) v2.0.0+ is a working
-reference implementation of exactly this — it defaults to this HTTP mode specifically because of
-this finding, with a required bearer-token auth (the server refuses to start unauthenticated).
+```bash
+cd your-project
+gemini-sandbox-mcp-up       # start it for THIS project (idempotent — safe to re-run)
+gemini-sandbox -s -p "run make unit-test"   # now reachable as an MCP tool inside the sandbox
+gemini-sandbox-mcp-down     # stop it
+gemini-sandbox-mcp-status   # check whether it's running
+```
 
-**Wired in and working, not just theoretical**: [`davindermahal/gemini-sandbox`](https://github.com/davindermahal/gemini-sandbox)
-exists specifically to test this toolkit against a real project, and its `bin/mcp-up` /
-`bin/mcp-down` / `bin/mcp-status` (also reachable as `make mcp-up` etc. there) are a complete,
-verified reference for wiring this into any project that uses this toolkit — per-developer token
-generation, process lifecycle management (including two real bugs found and fixed by actually
-running it repeatedly: `npx`-launched processes need process-group tracking, not `$!`, and
-"started" needs to mean the port is actually accepting connections, not just that a process
-exists — see that repo's `.ai/system.md` for the full detail), and the `makeRunner` entry in
-`.gemini/settings.json.tmpl`. Copy that pattern into your own project's `.gemini/` directory and
-`Makefile`. Not currently baked into this toolkit's own `install.sh`/`merge-settings.js` (those
-register global, always-on `stdio` servers — `ai-intake-mcp`, `chrome-devtools-mcp` — spawned
-fresh inside each sandbox session; `make-runner-mcp` is architecturally different, a persistent
-per-project process with its own port and token, which is why it's a per-project setup rather than
-a global toolkit registration).
+**Explicit, per-project opt-in — not automatic**, deliberately: a persistent, token-protected,
+host-listening server capable of running arbitrary `make` targets is a different risk class than
+the transient `stdio` servers this toolkit already auto-registers (those are spawned fresh inside
+the sandbox each session, scoped to that one session's lifetime, with no standing host access).
+`gemini-sandbox` prints a one-line hint if it sees a `Makefile` in a project that's never run
+`gemini-sandbox-mcp-up`, but never starts one on its own.
+
+**Why this isn't just another entry in `merge-settings.js`**: `chrome-devtools-mcp`/`ai-intake-mcp`
+are stateless and project-agnostic — spawned fresh, `stdio`, inside the sandbox each session, so
+one global registration (done once, at install time) correctly serves every project.
+`make-runner-mcp` is a persistent, host-side process scoped to **one project**, so it needs its own
+port and token per project — `gemini-sandbox-mcp-up` picks a free port and generates a token the
+first time it's run for a given project, stored under `~/.gemini-sandbox-mcp-runner/<key>/`
+(`<key>` derived from that project's real path — decoupled from wherever this toolkit itself is
+cloned, so it isn't part of this repo's own working tree). `bin/gemini-sandbox` registers the
+correct project-specific entry into that project's own `.gemini/settings.json` on every
+invocation (touching only that one key — Gemini merges it with the global registrations above
+automatically), and removes it again once `gemini-sandbox-mcp-down` stops the process, rather than
+leaving a permanently broken entry behind.
+
+Verified end-to-end, including the property that's genuinely new here — two different projects
+running simultaneously don't collide (distinct ports and tokens, one project's token rejected
+against another's endpoint) — through this toolkit's actual hardened image against real
+Docker-driven `make` targets, with the sandboxed session's own native shell tool confirmed to have
+zero Docker access throughout.
 
 ## Troubleshooting
 
@@ -160,11 +173,22 @@ git pull
   CLI/daemon access — nothing inside the sandbox can reach the host's Docker daemon.
 - `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`, and
   `SANDBOX_MOUNTS` (only ever non-empty for the local-dev override or an admin policy dir, if
-  present — deliberately no docker.sock mount), then execs `gemini`.
+  present — deliberately no docker.sock mount); also sets or prunes the current project's
+  `makeRunner` MCP registration (see "Docker access for your project's own containers" above)
+  before `exec`-ing into `gemini`.
 - `env.example` / `env` (gitignored, per-machine) — `AI_INTAKE_MCP_DIR` and
   `AI_INTAKE_DOCUMENTATION_MCP_DIR`, the local-dev override described above. Optional.
 - `install.sh` — checks prerequisites and environment, builds the image, and wires everything
-  above into place.
-- `merge-settings.js` — the actual `mcpServers` registration logic install.sh runs; edit this to
-  add, remove, or change a registered server.
+  above into place, including the `gemini-sandbox-mcp-*` commands below.
+- `merge-settings.js` — the actual `mcpServers` registration logic install.sh runs against the
+  **global** `~/.gemini/settings.json`; edit this to add, remove, or change a globally-registered
+  server.
+- `bin/gemini-sandbox-mcp-up` / `bin/gemini-sandbox-mcp-down` / `bin/gemini-sandbox-mcp-status` —
+  manage the persistent, per-project `make-runner-mcp` process described above.
+- `bin/mcp-runner-lib.sh` — shared by the three commands above and by `bin/gemini-sandbox` itself:
+  project-path→state-directory key derivation, the process-group liveness check, and the
+  free-port picker.
+- `merge-project-settings.js` — sets or prunes only the `mcpServers.makeRunner` key of a
+  **project-local** `.gemini/settings.json`, preserving everything else already there — the
+  per-project counterpart to `merge-settings.js`'s global-file role.
 - `debug.sh` / `debug-live.sh` — see [Troubleshooting](#troubleshooting) above.

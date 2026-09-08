@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Stops the make-runner-mcp process group for the CURRENT project (cwd), if running. Kills the
+# whole process group (negative PID), not just the originally-recorded PID -- see
+# mcp-runner-lib.sh's mcp_runner_is_alive comment for why a single PID isn't reliable for an
+# `npx`-launched process.
+#
+# State (port/token) is deliberately left in place, not deleted -- so the next
+# gemini-sandbox-mcp-up reuses the same token rather than generating a new one, and so
+# bin/gemini-sandbox can tell "never used here" apart from "used before, now stopped" (the latter
+# gets a soft informational note and its stale registration pruned from that project's
+# .gemini/settings.json, rather than looking identical to a project that's never touched this
+# feature at all).
+set -euo pipefail
+
+LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck disable=SC1091
+source "$LIB_DIR/mcp-runner-lib.sh"
+
+STATE_DIR="$(mcp_runner_state_dir "$(pwd -P)")"
+
+if mcp_runner_is_alive "$STATE_DIR"; then
+  PGID="$(cat "$STATE_DIR/pid")"
+  kill -TERM "-$PGID" 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    kill -0 "-$PGID" 2>/dev/null || break
+    sleep 1
+  done
+  kill -KILL "-$PGID" 2>/dev/null || true
+  rm -f "$STATE_DIR/pid"
+  echo "make-runner-mcp stopped"
+else
+  rm -f "$STATE_DIR/pid" 2>/dev/null || true
+  echo "make-runner-mcp is not running for this project"
+fi

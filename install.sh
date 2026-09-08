@@ -13,6 +13,11 @@
 #      written to ~/.gemini/settings.json.pre-gemini-sandbox-install if one doesn't already exist.
 #      (ai-intake-mcp / ai-intake-documentation-mcp point at the local clones in env instead, if
 #      you've set AI_INTAKE_MCP_DIR / AI_INTAKE_DOCUMENTATION_MCP_DIR -- see env.example.)
+#   5. Installs gemini-sandbox-mcp-up/down/status -- explicit, per-project commands for reaching a
+#      project's own Docker-driven `make` targets from inside the sandbox via make-runner-mcp, run
+#      outside the sandbox as its own process (see README's "Docker access for your project's own
+#      containers"). Not auto-started and not globally registered here, deliberately -- unlike
+#      steps 2/4 above, this is per-project and opt-in, not something every project gets for free.
 #
 # Safe to re-run any time (e.g. after editing sandbox.Dockerfile or env, or after a gemini-cli
 # upgrade -- re-running repins the sandbox image to your current CLI version).
@@ -117,6 +122,20 @@ if ! command -v gemini-sandbox >/dev/null 2>&1; then
   echo "  export PATH=\"\$HOME/.local/bin:\$PATH\"" >&2
 fi
 
+# --- 5. Install the make-runner-mcp lifecycle commands -------------------------------------------
+# Prefixed gemini-sandbox-mcp-* (not bare mcp-up/down/status like the single-project reference in
+# davindermahal/gemini-sandbox) because these get installed onto the user's global PATH -- a bare
+# name would squat a much more generic, collision-prone slot than a project-relative ./bin/mcp-up
+# ever would. Just symlinks, same idempotent pattern as gemini-sandbox itself above -- there is
+# nothing to merge into the global settings.json here (unlike chrome-devtools/ai-intake below),
+# since make-runner-mcp is a per-project, explicit-opt-in thing whose registration happens inside
+# bin/gemini-sandbox itself, dynamically, per project directory -- see mcp-runner-lib.sh.
+echo "==> Installing gemini-sandbox-mcp-up/down/status to $BIN_DIR"
+for cmd in gemini-sandbox-mcp-up gemini-sandbox-mcp-down gemini-sandbox-mcp-status; do
+  ln -sf "$TOOLKIT_DIR/bin/$cmd" "$BIN_DIR/$cmd"
+done
+mkdir -p "$HOME/.gemini-sandbox-mcp-runner"
+
 if [[ ! -f "$TOOLKIT_DIR/env" ]]; then
   cp "$TOOLKIT_DIR/env.example" "$TOOLKIT_DIR/env"
   echo "==> Wrote $TOOLKIT_DIR/env from the template -- edit it to set AI_INTAKE_MCP_DIR / AI_INTAKE_DOCUMENTATION_MCP_DIR (or leave blank if you don't use them)."
@@ -124,7 +143,7 @@ fi
 # shellcheck disable=SC1090
 source "$TOOLKIT_DIR/env" 2>/dev/null || true
 
-# --- 5. Register MCP servers globally, merging rather than overwriting -------------------------
+# --- 6. Register MCP servers globally, merging rather than overwriting -------------------------
 echo "==> Registering MCP servers in $GEMINI_SETTINGS"
 mkdir -p "$(dirname "$GEMINI_SETTINGS")"
 if [[ -f "$GEMINI_SETTINGS" && ! -f "$GEMINI_SETTINGS.pre-gemini-sandbox-install" ]]; then

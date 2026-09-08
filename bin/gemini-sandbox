@@ -93,4 +93,40 @@ else
   unset SANDBOX_MOUNTS
 fi
 
+# make-runner-mcp discovery: set or prune the CURRENT project's makeRunner entry in its own
+# .gemini/settings.json (Gemini merges global + project-scoped settings automatically, so this
+# only ever needs to touch this one key -- everything else a project's settings.json might already
+# have, plus the global chrome-devtools/ai-intake registrations, are untouched/handled elsewhere).
+# See mcp-runner-lib.sh and gemini-sandbox-mcp-up for why this is a per-project, explicit-opt-in
+# thing rather than a global registration the way chrome-devtools-mcp/ai-intake-mcp are.
+# shellcheck disable=SC1091
+source "$TOOLKIT_DIR/bin/mcp-runner-lib.sh"
+PROJECT_DIR="$(pwd -P)"
+MCP_STATE_DIR="$(mcp_runner_state_dir "$PROJECT_DIR")"
+PROJECT_SETTINGS="$PROJECT_DIR/.gemini/settings.json"
+
+if mcp_runner_is_alive "$MCP_STATE_DIR"; then
+  MCP_RUNNER_MODE=set \
+  MCP_RUNNER_SETTINGS_PATH="$PROJECT_SETTINGS" \
+  MCP_RUNNER_URL="http://host.docker.internal:$(cat "$MCP_STATE_DIR/port")/mcp" \
+  MCP_RUNNER_TOKEN="$(cat "$MCP_STATE_DIR/token")" \
+    node "$TOOLKIT_DIR/merge-project-settings.js"
+elif [[ -d "$MCP_STATE_DIR" ]]; then
+  # A state directory exists (this project has used the feature before -- gemini-sandbox-mcp-up
+  # creates it on first run and gemini-sandbox-mcp-down deliberately leaves it in place, removing
+  # only the now-dead pid file) but no process group is currently alive -- distinct from "never
+  # used here" (see mcp-runner-lib.sh): tell the user, and prune the now-stale entry rather than
+  # leaving a permanently "Connection closed" registration behind.
+  echo "Note: make-runner-mcp is not running for this project -- run 'gemini-sandbox-mcp-up' first for Docker-driven make targets to be reachable." >&2
+  MCP_RUNNER_MODE=prune \
+  MCP_RUNNER_SETTINGS_PATH="$PROJECT_SETTINGS" \
+    node "$TOOLKIT_DIR/merge-project-settings.js"
+elif [[ -f "$PROJECT_DIR/Makefile" ]]; then
+  # Never used here, and there's a Makefile -- a one-line, non-blocking hint that this exists,
+  # nothing more. No state is created or written by this branch (no marker file to remember it was
+  # shown) -- deliberately, so a project that's never touched this feature stays completely
+  # untouched (no new files at all) until someone actually opts in.
+  echo "Tip: this project has a Makefile -- run 'gemini-sandbox-mcp-up' once to make its targets reachable from inside this sandbox." >&2
+fi
+
 exec gemini "$@"

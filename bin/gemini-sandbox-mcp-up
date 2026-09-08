@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Starts a make-runner-mcp process for the CURRENT project (cwd), outside any sandbox, with this
+# machine's normal Docker access -- reachable from a sandboxed `gemini-sandbox` session only over
+# the network (host.docker.internal), never via a locally-spawned subprocess or a mounted socket.
+# See https://github.com/davindermahal/gemini-sandbox 's
+# .ai/guides/gemini-docker-sandbox-mcp.md Section 0 for the full reasoning, and that repo's
+# bin/mcp-up for the single-project version this generalizes (the process-management approach
+# below is copied from there deliberately, not re-derived -- see mcp-runner-lib.sh's comments for
+# why each piece is the way it is).
+#
+# Explicit, one-time-per-project command rather than something bin/gemini-sandbox starts silently
+# on your behalf -- a persistent, token-protected, host-listening server capable of running
+# arbitrary `make` targets is a different risk class than the transient stdio MCP servers this
+# toolkit already auto-registers (chrome-devtools-mcp, ai-intake-mcp), and this toolkit already
+# applies the same "opt-in, not implicit" principle elsewhere: GEMINI_SANDBOX=docker is a
+# per-invocation env var, not a global settings.json default, specifically so plain `gemini` is
+# never silently sandboxed either.
+set -euo pipefail
+
+LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck disable=SC1091
+source "$LIB_DIR/mcp-runner-lib.sh"
+
+PROJECT_DIR="$(pwd -P)"
+STATE_DIR="$(mcp_runner_state_dir "$PROJECT_DIR")"
+mkdir -p "$STATE_DIR"
+echo "$PROJECT_DIR" > "$STATE_DIR/project-dir"
+
+if mcp_runner_is_alive "$STATE_DIR"; then
+  echo "make-runner-mcp already running for this project (pgid $(cat "$STATE_DIR/pid"), port $(cat "$STATE_DIR/port"))"
+  exit 0
+fi
+rm -f "$STATE_DIR/pid" # stale, if the process died without cleaning up after itself
+
+# A fresh random token only if this project has never had one before -- reused across restarts
+# (same convenience gemini-sandbox's own .gemini/env-based MAKE_RUNNER_MCP_TOKEN persistence
+# already provides), never committed, never shared across projects.
+if [[ ! -f "$STATE_DIR/token" ]]; then
+  openssl rand -hex 24 > "$STATE_DIR/token"
+fi
+TOKEN="$(cat "$STATE_DIR/token")"
+
+PORT="$(mcp_runner_pick_free_port)"
+echo "$PORT" > "$STATE_DIR/port"
+
+setsid env PROJECT_DIR="$PROJECT_DIR" MCP_HTTP_TOKEN="$TOKEN" MCP_HTTP_PORT="$PORT" \
+  npx -y github:davindermahal/make-runner-mcp#v2.0.0 > "$STATE_DIR/log" 2>&1 < /dev/null &
+echo $! > "$STATE_DIR/pid"
+
+# A live process group is necessary but not sufficient: `npx -y github:...` does a real network
+# round-trip (git ls-remote, then fetch if not already cached) before make-runner-mcp itself even
+# starts, which can take several seconds on an uncached/first run -- a fixed short sleep here
+# reported "started" while the server wasn't actually listening yet (caught live in
+# gemini-sandbox/bin/mcp-up: a curl right after a 1s sleep got connection-refused). Poll for the
+# port actually accepting connections instead, up to a generous timeout, so "started" here means
+# "reachable," not just "processes exist." bash's /dev/tcp avoids a dependency on curl/nc.
+READY=""
+for _ in $(seq 1 60); do
+  if ! mcp_runner_is_alive "$STATE_DIR"; then
+    break # process group died -- no point continuing to poll
+  fi
+  if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+    exec 3<&- 3>&-
+    READY=1
+    break
+  fi
+  sleep 0.5
+done
+
+if [[ -z "$READY" ]]; then
+  echo "make-runner-mcp did not become reachable on port $PORT -- check $STATE_DIR/log:" >&2
+  cat "$STATE_DIR/log" >&2
+  kill -TERM "-$(cat "$STATE_DIR/pid")" 2>/dev/null || true
+  rm -f "$STATE_DIR/pid"
+  exit 1
+fi
+
+echo "make-runner-mcp started for this project (pgid $(cat "$STATE_DIR/pid"), port $PORT), logging to $STATE_DIR/log"
+echo "Run 'gemini-sandbox' from this directory to use it."
