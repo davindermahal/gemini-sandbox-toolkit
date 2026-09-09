@@ -14,7 +14,7 @@
 # your installed CLI's version automatically (`gemini --version`) and passes it as this build arg
 # -- it isn't hardcoded, so this Dockerfile stays correct across machines with different CLI
 # versions and across your own gemini-cli upgrades (just re-run install.sh).
-ARG GEMINI_CLI_VERSION=0.57.0
+ARG GEMINI_CLI_VERSION=0.58.0
 FROM us-docker.pkg.dev/gemini-code-dev/gemini-cli/sandbox:${GEMINI_CLI_VERSION} AS base
 
 USER root
