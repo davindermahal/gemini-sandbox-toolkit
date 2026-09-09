@@ -105,9 +105,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libsecret-1-0 \
 # explicitly here too, same as its sibling @davindermahal/context-schema was left implicit only
 # because that one predates this image ever having pinned versions at all. Pure JS, no native
 # addons, so it needs nothing from --allow-scripts.
-ARG AI_INTAKE_MCP_VERSION=0.3.0
-ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.4.0
-ARG AI_INTAKE_CONFLUENCE_CLIENT_VERSION=0.1.0
+ARG AI_INTAKE_MCP_VERSION=0.3.2
+ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.5.1
+ARG AI_INTAKE_CONFLUENCE_CLIENT_VERSION=0.1.1
 ARG BETTER_SQLITE3_VERSION=11.10.0
 RUN PATH=/usr/bin:$PATH npm install -g --allow-scripts=keytar \
     @davindermahal/ai-intake-mcp@${AI_INTAKE_MCP_VERSION} \
@@ -152,7 +152,7 @@ RUN set -e; \
 # `npx ...@latest` per session) for a pinned version and no per-session network fetch.
 RUN apt-get update && apt-get install -y --no-install-recommends chromium \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g chrome-devtools-mcp@1.8.0 \
+    && npm install -g chrome-devtools-mcp@1.9.0 \
     && chown -R node:node /usr/local/share/npm-global 2>/dev/null || true
 
 USER node
