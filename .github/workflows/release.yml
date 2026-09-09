@@ -1,0 +1,37 @@
+name: Release
+
+# This repo has no package.json/npm package -- nothing here is published to a registry. A pushed
+# `v<semver>` tag is the entire release process: this workflow turns it into a GitHub Release, using
+# the tag's own annotated message as the release notes (see CLAUDE.md's "Releasing" section for how
+# that message gets written). Pushing the tag is what *initiates* this -- there is no local
+# `gh release create` step, so don't run one by hand; that would just race this workflow.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo (full history, so the tag's annotated message is available)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create GitHub release from the tag's own message
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="$(git tag -l --format='%(contents)' "$TAG")"
+          if [ -z "$NOTES" ]; then
+            echo "Tag $TAG has no annotated message (was it created with 'git tag -a'?) -- refusing" >&2
+            echo "to publish a release with empty notes. Delete the tag, re-tag with -a -m, and push again." >&2
+            exit 1
+          fi
+          gh release create "$TAG" --title "$TAG" --notes "$NOTES"
