@@ -17,21 +17,22 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repo (full history, so the tag's annotated message is available)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Create GitHub release from the tag's own message
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          NOTES="$(git tag -l --format='%(contents)' "$TAG")"
-          if [ -z "$NOTES" ]; then
-            echo "Tag $TAG has no annotated message (was it created with 'git tag -a'?) -- refusing" >&2
-            echo "to publish a release with empty notes. Delete the tag, re-tag with -a -m, and push again." >&2
+          # Read the tag's message via the GitHub API, not local git -- actions/checkout doesn't
+          # reliably preserve the annotated tag object when materializing the ref locally (observed
+          # directly: `git tag -l --format='%(contents)'` came back with the *commit* message
+          # instead, even with fetch-depth: 0), so this is the only way to get it faithfully.
+          OBJ_TYPE="$(gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" --jq .object.type)"
+          if [ "$OBJ_TYPE" != "tag" ]; then
+            echo "Tag $TAG is lightweight (was it created with 'git tag -a'?) -- refusing to publish" >&2
+            echo "a release with no real notes. Delete the tag, re-tag with -a -m, and push again." >&2
             exit 1
           fi
+          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" --jq .object.sha)"
+          NOTES="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq .message)"
           gh release create "$TAG" --title "$TAG" --notes "$NOTES"
