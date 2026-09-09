@@ -51,7 +51,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # ai-intake-mcp / ai-intake-documentation-mcp: baked in at pinned published versions (bump these
-# two ARGs and re-run install.sh to update -- same convention as chrome-devtools-mcp below).
+# ARGs and re-run install.sh to update -- same convention as chrome-devtools-mcp below).
 # `env` (not calling npm directly) is required, not stylistic: npm's own CLI script also resolves
 # `node` via `#!/usr/bin/env node`, so without forcing PATH here it silently installs against the
 # bundled v20 above instead of this v24 runtime (confirmed: `npm warn EBADENGINE ... current: {
@@ -64,11 +64,20 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # any platform yet (checked its GitHub releases directly), so this always compiles from source
 # here (~2 minutes); that's why `make` above matters too (node-gyp needs it, plus the gcc/python3
 # the base image already bundles).
-ARG AI_INTAKE_MCP_VERSION=0.2.0
-ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.3.0
+#
+# @davindermahal/confluence-client: the shared Confluence transport both packages above now
+# depend on (as of ai-intake-mcp 0.3.0 / documentation-mcp 0.4.0, backing documentation-mcp's new
+# fetch_confluence_pages tool) -- npm would resolve it transitively either way, but it's pinned
+# explicitly here too, same as its sibling @davindermahal/context-schema was left implicit only
+# because that one predates this image ever having pinned versions at all. Pure JS, no native
+# addons, so it needs nothing from --allow-scripts.
+ARG AI_INTAKE_MCP_VERSION=0.3.0
+ARG AI_INTAKE_DOCUMENTATION_MCP_VERSION=0.4.0
+ARG AI_INTAKE_CONFLUENCE_CLIENT_VERSION=0.1.0
 RUN PATH=/usr/bin:$PATH npm install -g --allow-scripts=better-sqlite3,keytar \
     @davindermahal/ai-intake-mcp@${AI_INTAKE_MCP_VERSION} \
-    @davindermahal/documentation-mcp@${AI_INTAKE_DOCUMENTATION_MCP_VERSION}
+    @davindermahal/documentation-mcp@${AI_INTAKE_DOCUMENTATION_MCP_VERSION} \
+    @davindermahal/confluence-client@${AI_INTAKE_CONFLUENCE_CLIENT_VERSION}
 
 # chrome-devtools-mcp: Chromium's own internal sandbox needs unprivileged user namespaces this
 # container doesn't grant (verified: fails with "No usable sandbox!" even as a non-root user with
