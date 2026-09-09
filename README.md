@@ -56,6 +56,23 @@ Both are baked into the image at pinned versions (`sandbox.Dockerfile`), the sam
 `chrome-devtools-mcp` is. To pick up a new release: publish it from that server's own repo, bump
 the matching `ARG ..._VERSION` near the top of `sandbox.Dockerfile`, then `./install.sh`.
 
+### Updating the precompiled `better-sqlite3` binary
+
+`better-sqlite3` (an `ai-intake-mcp` dependency) has no prebuilt binary for Node 24 on any
+platform yet, so compiling it from source costs ~2 minutes on every image build. To avoid paying
+that on every `./install.sh` run, a compiled binary is checked into `prebuilt/better-sqlite3/` and
+baked in directly (see `sandbox.Dockerfile`'s comment on the `better-sqlite3-builder` stage). It
+only needs regenerating when `better-sqlite3` itself bumps, or the pinned Node major changes:
+
+```bash
+make check-better-sqlite3     # is a newer better-sqlite3 available?
+make rebuild-better-sqlite3   # recompile prebuilt/ against the current pin (or BETTER_SQLITE3_VERSION=x.y.z)
+```
+
+Then bump `ARG BETTER_SQLITE3_VERSION` in `sandbox.Dockerfile` to match, and commit both together.
+If the two ever drift apart, `install.sh` doesn't fail — the Dockerfile falls back to compiling
+from source and tells you so, both during the build and again at the end of `install.sh`'s output.
+
 ### Local-dev override (iterating on either server without publishing)
 
 Copy `env.example` to `env` and set `AI_INTAKE_MCP_DIR` and/or `AI_INTAKE_DOCUMENTATION_MCP_DIR`
@@ -172,6 +189,9 @@ git pull
   newer version than the sandbox's bundled one, Chromium + `chrome-devtools-mcp`, and
   `ai-intake-mcp` + `ai-intake-documentation-mcp` at pinned published versions. No Docker
   CLI/daemon access — nothing inside the sandbox can reach the host's Docker daemon.
+- `prebuilt/better-sqlite3/` — checked-in precompiled binary so `install.sh` doesn't recompile
+  `better-sqlite3` from source on every run; `Makefile` regenerates it (see "Updating the
+  precompiled `better-sqlite3` binary" above).
 - `bin/gemini-sandbox` — the wrapper: sets `GEMINI_SANDBOX=docker`, `GEMINI_SANDBOX_IMAGE`, and
   `SANDBOX_MOUNTS` (only ever non-empty for the local-dev override or an admin policy dir, if
   present — deliberately no docker.sock mount); also sets or prunes the current project's

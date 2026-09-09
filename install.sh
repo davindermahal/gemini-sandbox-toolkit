@@ -96,22 +96,36 @@ echo "    buildx builder: $(docker buildx inspect 2>/dev/null | awk -F': *' '/^N
 # --- 3. Build the image, pinned to your installed CLI's version -------------------------------
 GEMINI_CLI_VERSION="$(gemini --version 2>/dev/null | tr -d '[:space:]')"
 echo "==> Building gemini-sandbox:latest (base image pinned to your gemini-cli version: $GEMINI_CLI_VERSION)"
-# sandbox.Dockerfile has no COPY/ADD -- it never needs any local file besides itself -- so the
-# build is piped in via stdin with NO separate build context, rather than `-f sandbox.Dockerfile
-# .`. This isn't just a style choice: BuildKit's handling of `-f` against a directory context
-# turned out to be version-dependent (confirmed: it failed with "failed to read dockerfile: open
-# sandbox.Dockerfile: no such file or directory" on a host running an older buildx/BuildKit, even
-# with a relative path, a verified-correct cwd, and a completely clean environment -- two
-# different fixes attempting to work around that path-resolution behavior both failed). Piping the
-# Dockerfile via stdin removes BuildKit's context-relative dockerfile lookup from the equation
-# entirely, rather than trying to satisfy whatever that lookup wants on every BuildKit version.
-echo "    dockerfile: $TOOLKIT_DIR/sandbox.Dockerfile (piped via stdin, no separate build context needed)"
+# sandbox.Dockerfile COPYs the checked-in prebuilt/better-sqlite3/ binary in, so it needs SOME
+# build context now -- but still not `-f sandbox.Dockerfile .` (a directory context). BuildKit's
+# handling of `-f` against a directory context turned out to be version-dependent (confirmed: it
+# failed with "failed to read dockerfile: open sandbox.Dockerfile: no such file or directory" on a
+# host running an older buildx/BuildKit, even with a relative path, a verified-correct cwd, and a
+# completely clean environment -- two different fixes attempting to work around that
+# path-resolution behavior both failed). Piping a TAR of just sandbox.Dockerfile + prebuilt/ to
+# stdin instead (verified working, spike-tested on this host's Docker 29.8.0 / buildx 0.37.0)
+# keeps that same directory-context, relative-path dockerfile lookup out of the equation entirely
+# -- `-f sandbox.Dockerfile` here resolves against the tar's own contents, not the local
+# filesystem -- while still giving COPY something to read from. `-h` dereferences symlinks so this
+# works the same whether $TOOLKIT_DIR was reached directly or through the ~/.local/bin symlink.
+echo "    dockerfile: $TOOLKIT_DIR/sandbox.Dockerfile (+ prebuilt/, piped via stdin as a tar, no directory context)"
 set -x
-docker build \
+tar -czh -C "$TOOLKIT_DIR" sandbox.Dockerfile prebuilt | docker build \
   --build-arg GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" \
+  -f sandbox.Dockerfile \
   -t gemini-sandbox:latest \
-  - < "$TOOLKIT_DIR/sandbox.Dockerfile"
+  -
 set +x
+
+# The Dockerfile falls back to compiling better-sqlite3 from source (instead of failing the build)
+# if the checked-in prebuilt didn't load -- still correct, just slow again, and easy to miss in
+# the scrollback above. Surface it clearly one more time down here instead.
+if docker run --rm --entrypoint test gemini-sandbox:latest -f /etc/gemini-sandbox-better-sqlite3-fallback 2>/dev/null; then
+  echo ""
+  echo "==> WARNING: the checked-in better-sqlite3 prebuilt was stale and got recompiled from"
+  echo "    source during this build. Run 'make rebuild-better-sqlite3' in $TOOLKIT_DIR to"
+  echo "    refresh prebuilt/ so future builds stay fast, then commit the result."
+fi
 
 # --- 4. Install the wrapper ---------------------------------------------------------------------
 echo "==> Installing bin/gemini-sandbox to $BIN_DIR"
