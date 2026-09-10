@@ -35,4 +35,8 @@ jobs:
           fi
           TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" --jq .object.sha)"
           NOTES="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq .message)"
-          gh release create "$TAG" --title "$TAG" --notes "$NOTES"
+          # --repo, not a local checkout: gh release create otherwise shells out to local git for
+          # repo context, which doesn't exist here since this workflow has no checkout step (nothing
+          # else it does needs the working tree -- confirmed directly: v0.3.0's run failed with
+          # "fatal: not a git repository" before this flag was added).
+          gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "$TAG" --notes "$NOTES"
