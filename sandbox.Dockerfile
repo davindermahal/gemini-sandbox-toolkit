@@ -149,10 +149,12 @@ RUN set -e; \
 # server's registration (see ~/.gemini/settings.json after running install.sh), not by adding
 # container privileges. chrome-devtools-mcp declares engines.node "^20.19.0 || ^22.12.0 || >=23",
 # which the base image's bundled Node already satisfies -- installed globally at build time (not
-# `npx ...@latest` per session) for a pinned version and no per-session network fetch.
+# `npx ...@latest` per session) for a pinned version and no per-session network fetch. Pinned via an
+# ARG (like the packages above) so `make bump-mcp-versions` can keep it current the same way.
+ARG CHROME_DEVTOOLS_MCP_VERSION=1.9.0
 RUN apt-get update && apt-get install -y --no-install-recommends chromium \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g chrome-devtools-mcp@1.9.0 \
+    && npm install -g chrome-devtools-mcp@${CHROME_DEVTOOLS_MCP_VERSION} \
     && chown -R node:node /usr/local/share/npm-global 2>/dev/null || true
 
 USER node

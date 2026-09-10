@@ -44,3 +44,67 @@ rebuild-better-sqlite3:
 	docker rm gemini-sandbox-bsq3-extract >/dev/null
 	@echo "==> Wrote $(BSQ3_PREBUILT_DIR)/better_sqlite3.node"
 	@echo "    Now set ARG BETTER_SQLITE3_VERSION=$(BETTER_SQLITE3_VERSION) in sandbox.Dockerfile and commit both."
+
+# --- MCP package version bumping -------------------------------------------------------------
+# Same idea as check-better-sqlite3/rebuild-better-sqlite3 above, for the MCP-related npm packages
+# pinned in sandbox.Dockerfile. better-sqlite3 stays out of this list -- its version is tied to a
+# checked-in compiled binary, not just a version string, so it keeps its own pair above.
+
+.PHONY: check-mcp-versions bump-mcp-versions upgrade-mcps
+
+# ARG name in sandbox.Dockerfile : npm package name. Add a line here when a new MCP package gets
+# baked into the image -- nothing else below needs to change.
+define MCP_PACKAGES
+AI_INTAKE_MCP_VERSION @davindermahal/ai-intake-mcp
+AI_INTAKE_DOCUMENTATION_MCP_VERSION @davindermahal/documentation-mcp
+AI_INTAKE_CONFLUENCE_CLIENT_VERSION @davindermahal/confluence-client
+CHROME_DEVTOOLS_MCP_VERSION chrome-devtools-mcp
+endef
+export MCP_PACKAGES
+
+# Reports which pinned MCP packages have a newer version on npm than sandbox.Dockerfile currently
+# has. Informational only -- doesn't change anything.
+check-mcp-versions:
+	@echo "$$MCP_PACKAGES" | while read -r arg_name pkg_name; do \
+		[ -z "$$arg_name" ] && continue; \
+		current="$$(grep -m1 "^ARG $$arg_name=" sandbox.Dockerfile | cut -d= -f2)"; \
+		latest="$$(npm view "$$pkg_name" version)"; \
+		if [ "$$current" = "$$latest" ]; then \
+			echo "$$pkg_name: $$current (current)"; \
+		else \
+			echo "$$pkg_name: $$current -> $$latest available"; \
+		fi; \
+	done
+
+# Writes any newer versions found above straight into sandbox.Dockerfile's ARG lines. Idempotent --
+# safe to run any time, a no-op if everything's already current. Deliberately stops there: it
+# doesn't rebuild the image or touch CHANGELOG.md/git, same division of labor as
+# rebuild-better-sqlite3 above -- see CLAUDE.md's "Releasing" section for what comes next
+# (./install.sh to rebuild+register, ./debug.sh to smoke-test, then changelog/commit/tag/push).
+bump-mcp-versions:
+	@before="$$(md5sum sandbox.Dockerfile)"; \
+	echo "$$MCP_PACKAGES" | while read -r arg_name pkg_name; do \
+		[ -z "$$arg_name" ] && continue; \
+		current="$$(grep -m1 "^ARG $$arg_name=" sandbox.Dockerfile | cut -d= -f2)"; \
+		latest="$$(npm view "$$pkg_name" version)"; \
+		if [ "$$current" != "$$latest" ]; then \
+			sed -i "s/^ARG $$arg_name=.*/ARG $$arg_name=$$latest/" sandbox.Dockerfile; \
+			echo "$$pkg_name: $$current -> $$latest"; \
+		fi; \
+	done; \
+	after="$$(md5sum sandbox.Dockerfile)"; \
+	if [ "$$before" = "$$after" ]; then \
+		echo "All MCP packages already current -- nothing to bump."; \
+	else \
+		echo ""; \
+		echo "Bumped sandbox.Dockerfile. Next: ./install.sh (rebuild+register), ./debug.sh (smoke"; \
+		echo "test), then CHANGELOG.md + commit + tag + push per CLAUDE.md."; \
+	fi
+
+# The one-command version of the above: bump, rebuild+register, smoke-test. If nothing was
+# outdated, ./install.sh's own Docker layer cache makes the "rebuild" a no-op in seconds -- no need
+# to special-case that here. Stops short of CHANGELOG.md/commit/tag/push -- that still needs a
+# human/agent to write the actual release notes; see CLAUDE.md's "Releasing" section for that part.
+upgrade-mcps: bump-mcp-versions
+	./install.sh
+	./debug.sh

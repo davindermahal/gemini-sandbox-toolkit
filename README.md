@@ -50,11 +50,20 @@ Safe to re-run any time — every step is idempotent. `./install.sh` alone is me
 sufficient — no `env` file, no variables to set, unless you're doing the local-dev override
 described below.
 
-### Updating `ai-intake-mcp` / `ai-intake-documentation-mcp`
+### Updating the baked-in MCP packages
 
-Both are baked into the image at pinned versions (`sandbox.Dockerfile`), the same way
-`chrome-devtools-mcp` is. To pick up a new release: publish it from that server's own repo, bump
-the matching `ARG ..._VERSION` near the top of `sandbox.Dockerfile`, then `./install.sh`.
+`ai-intake-mcp`, `documentation-mcp`, `confluence-client`, and `chrome-devtools-mcp` are all baked
+into the image at pinned versions (`ARG ..._VERSION` near the top of `sandbox.Dockerfile`). To pick
+up newer releases:
+
+```bash
+make upgrade-mcps         # bump any outdated versions, rebuild + re-register, smoke-test
+```
+
+Or step by step: `make check-mcp-versions` (report only) / `make bump-mcp-versions` (write the
+`ARG`s) / `./install.sh` (rebuild + re-register) / `./debug.sh` (smoke-test).
+
+Then commit, and see `CLAUDE.md`'s "Releasing" section for cutting a new version/tag.
 
 ### Updating the precompiled `better-sqlite3` binary
 
