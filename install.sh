@@ -145,8 +145,9 @@ fi
 # nothing to merge into the global settings.json here (unlike chrome-devtools/ai-intake below),
 # since make-runner-mcp is a per-project, explicit-opt-in thing whose registration happens inside
 # bin/gemini-sandbox itself, dynamically, per project directory -- see mcp-runner-lib.sh.
-echo "==> Installing gemini-sandbox-mcp-up/down/status to $BIN_DIR"
-for cmd in gemini-sandbox-mcp-up gemini-sandbox-mcp-down gemini-sandbox-mcp-status; do
+echo "==> Installing gemini-sandbox-mcp-up/down/status/log/list/down-all to $BIN_DIR"
+for cmd in gemini-sandbox-mcp-up gemini-sandbox-mcp-down gemini-sandbox-mcp-status \
+           gemini-sandbox-mcp-log gemini-sandbox-mcp-list gemini-sandbox-mcp-down-all; do
   ln -sf "$TOOLKIT_DIR/bin/$cmd" "$BIN_DIR/$cmd"
 done
 mkdir -p "$HOME/.gemini-sandbox-mcp-runner"

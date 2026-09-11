@@ -4,6 +4,18 @@ All notable changes to this toolkit are documented here. Versions correspond to 
 GitHub Releases; each entry's text is also what the release tag itself is annotated with (see
 CLAUDE.md's "Releasing" section).
 
+## 0.5.0 — 2026-09-11
+
+### Added
+- `gemini-sandbox-mcp-log`: tails the current project's `make-runner-mcp` log on demand (`-f` to
+  follow, `-n N` for more lines) — previously only visible via a startup-failure dump or by finding
+  the log file under `~/.gemini-sandbox-mcp-runner/` by hand.
+- `gemini-sandbox-mcp-list` / `gemini-sandbox-mcp-down-all`: a cross-project view and a panic
+  button, for when you're not sure which project's instance is misbehaving or just want to reset
+  everything — list every project this machine has ever started an instance for (running or
+  stopped, with pgid/port), or force-stop all of them at once, without `cd`-ing into each project
+  first.
+
 ## 0.4.0 — 2026-09-11
 
 ### Added

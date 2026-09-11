@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Lists every project this machine has ever run gemini-sandbox-mcp-up for, and whether each one's
+# make-runner-mcp instance is currently alive. Unlike gemini-sandbox-mcp-status (scoped to the
+# CURRENT project via cwd), this is the global view -- there's no other registry of "which projects
+# have one running" than the state directories under ~/.gemini-sandbox-mcp-runner itself, so
+# tracking them down otherwise means `ls`-ing that directory and `cat`-ing project-dir by hand.
+set -euo pipefail
+
+LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck disable=SC1091
+source "$LIB_DIR/mcp-runner-lib.sh"
+
+shopt -s nullglob
+state_dirs=("$MCP_RUNNER_STATE_ROOT"/*/)
+shopt -u nullglob
+
+if [[ ${#state_dirs[@]} -eq 0 ]]; then
+  echo "No make-runner-mcp instances have ever been started on this machine."
+  exit 0
+fi
+
+for state_dir in "${state_dirs[@]}"; do
+  proj="$(cat "${state_dir}project-dir" 2>/dev/null || echo "(unknown -- missing project-dir file)")"
+  gone=""
+  [[ -d "$proj" ]] || gone=" [project directory no longer exists]"
+  if mcp_runner_is_alive "$state_dir"; then
+    printf 'running  pgid %-8s port %-6s %s%s\n' \
+      "$(cat "${state_dir}pid")" "$(cat "${state_dir}port" 2>/dev/null || echo '?')" "$proj" "$gone"
+  else
+    printf 'stopped  %-13s%-11s %s%s\n' "" "" "$proj" "$gone"
+  fi
+done

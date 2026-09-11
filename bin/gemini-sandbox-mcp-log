@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Shows the make-runner-mcp log for the CURRENT project (cwd) -- the same log file
+# gemini-sandbox-mcp-up already tails on a startup failure, exposed on demand for debugging a
+# process that's up but misbehaving (stale Makefile targets, an unexpected crash, etc).
+#
+# Usage:
+#   gemini-sandbox-mcp-log            # last 50 lines
+#   gemini-sandbox-mcp-log -n 200     # last 200 lines
+#   gemini-sandbox-mcp-log -f         # follow (tail -f), Ctrl-C to stop
+set -euo pipefail
+
+LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck disable=SC1091
+source "$LIB_DIR/mcp-runner-lib.sh"
+
+FOLLOW=""
+LINES=50
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -f) FOLLOW=1; shift ;;
+    -n) LINES="$2"; shift 2 ;;
+    *) echo "usage: gemini-sandbox-mcp-log [-f] [-n LINES]" >&2; exit 1 ;;
+  esac
+done
+
+STATE_DIR="$(mcp_runner_state_dir "$(pwd -P)")"
+
+if [[ ! -f "$STATE_DIR/log" ]]; then
+  echo "No make-runner-mcp log for this project yet -- run gemini-sandbox-mcp-up first." >&2
+  exit 1
+fi
+
+# Note the log is whatever the CURRENTLY (or most recently) running instance wrote -- it's not
+# rotated or reset by gemini-sandbox-mcp-down, so a stopped instance's last log still shows here.
+if [[ -n "$FOLLOW" ]]; then
+  tail -f "$STATE_DIR/log"
+else
+  tail -n "$LINES" "$STATE_DIR/log"
+fi

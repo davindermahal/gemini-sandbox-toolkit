@@ -151,6 +151,15 @@ gemini-sandbox-mcp-up       # start it for THIS project (idempotent — safe to 
 gemini-sandbox -s -p "run make unit-test"   # now reachable as an MCP tool inside the sandbox
 gemini-sandbox-mcp-down     # stop it
 gemini-sandbox-mcp-status   # check whether it's running
+gemini-sandbox-mcp-log      # tail its log (add -f to follow, -n N for more lines)
+```
+
+Two more for when something's not behaving right and you're not sure which project's instance is
+at fault, or want to reset all of them at once:
+
+```bash
+gemini-sandbox-mcp-list       # every project this machine has ever started one for, running or not
+gemini-sandbox-mcp-down-all   # force-stop all of them, across every project, in one shot
 ```
 
 **Explicit, per-project opt-in — not automatic**, deliberately: a persistent, token-protected,
@@ -238,9 +247,13 @@ git pull
 - `merge-settings.js` — the actual `mcpServers` registration logic install.sh runs against the
   **global** `~/.gemini/settings.json`; edit this to add, remove, or change a globally-registered
   server.
-- `bin/gemini-sandbox-mcp-up` / `bin/gemini-sandbox-mcp-down` / `bin/gemini-sandbox-mcp-status` —
-  manage the persistent, per-project `make-runner-mcp` process described above.
-- `bin/mcp-runner-lib.sh` — shared by the three commands above and by `bin/gemini-sandbox` itself:
+- `bin/gemini-sandbox-mcp-up` / `bin/gemini-sandbox-mcp-down` / `bin/gemini-sandbox-mcp-status` /
+  `bin/gemini-sandbox-mcp-log` — manage and debug the persistent, per-project `make-runner-mcp`
+  process described above, scoped to the current project (cwd).
+- `bin/gemini-sandbox-mcp-list` / `bin/gemini-sandbox-mcp-down-all` — the cross-project view and
+  panic button: list every project this machine has ever started an instance for (running or not),
+  or force-stop all of them at once, without having to `cd` into each project first.
+- `bin/mcp-runner-lib.sh` — shared by all the commands above and by `bin/gemini-sandbox` itself:
   project-path→state-directory key derivation, the process-group liveness check, and the
   free-port picker.
 - `merge-project-settings.js` — sets or prunes only the `mcpServers.makeRunner` key of a

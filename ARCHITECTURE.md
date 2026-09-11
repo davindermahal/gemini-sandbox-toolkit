@@ -97,7 +97,18 @@ gemini-sandbox-mcp-up
 ```
 gemini-sandbox            # writes this project's makeRunner registration, then runs gemini
 gemini-sandbox-mcp-status # "running (pgid ..., port ...)" or "not running"
+gemini-sandbox-mcp-log    # tail this project's log (-f to follow, -n N for more lines)
 gemini-sandbox-mcp-down   # kills the whole process group, leaves port/token on disk for reuse
+```
+
+All four are scoped to the current project (cwd), same as `-up` itself. When you don't know (or
+don't want to `cd` into) the specific project at fault — debugging "something's stuck," or wanting
+a clean slate across everything this machine has ever started — two more commands work across every
+project's state directory at once, without needing to be run from inside any of them:
+
+```
+gemini-sandbox-mcp-list       # every project ever started here, running or not, with port/pgid
+gemini-sandbox-mcp-down-all   # force-stops all of them, same TERM-then-KILL logic as -down
 ```
 
 Two projects running this simultaneously don't collide — distinct ports and tokens, one project's
@@ -155,6 +166,13 @@ different lookups underneath.
   above. Check the pin (`make check-make-runner-mcp-version`), bump it if stale
   (`make bump-make-runner-mcp-version`), then cycle the specific project's instance
   (`gemini-sandbox-mcp-down && gemini-sandbox-mcp-up` **in that project's directory**).
+- **A `makeRunner` instance is up but behaving wrong** (stale Makefile targets, unexpected errors
+  running a target) → `gemini-sandbox-mcp-log` from that project's directory tails its log; add `-f`
+  to follow it live while you retry the failing `make` target.
+- **Not sure which project's instance is at fault, or want to reset everything** →
+  `gemini-sandbox-mcp-list` shows every project this machine has ever started one for (running or
+  not, with pgid/port); `gemini-sandbox-mcp-down-all` force-stops all of them in one shot, from
+  anywhere — neither needs `cd`-ing into the project first.
 - **An MCP server shows `MCP error -32000: Connection closed`** → see README's
   [Troubleshooting](README.md#troubleshooting): `./debug.sh` first (no live model call, tests the
   image/mounts directly), `./debug-live.sh` if that passes but a real `gemini-sandbox -s` session
@@ -168,7 +186,7 @@ different lookups underneath.
 
 - `sandbox.Dockerfile`, `Makefile`'s `MCP_PACKAGES`/`check-mcp-versions`/`bump-mcp-versions` /
   `check-better-sqlite3`/`rebuild-better-sqlite3`, `merge-settings.js` → the image-baked category.
-- `bin/gemini-sandbox-mcp-up`/`-down`/`-status`, `bin/mcp-runner-lib.sh`,
+- `bin/gemini-sandbox-mcp-up`/`-down`/`-status`/`-log`/`-list`/`-down-all`, `bin/mcp-runner-lib.sh`,
   `merge-project-settings.js`, `Makefile`'s `check-make-runner-mcp-version`/
   `bump-make-runner-mcp-version` → the `make-runner-mcp` category.
 - `bin/gemini-sandbox` → the entry point that touches both: sets the sandbox env vars every
