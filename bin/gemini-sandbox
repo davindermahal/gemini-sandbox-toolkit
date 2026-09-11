@@ -3,7 +3,7 @@
 # sandboxes `gemini` and mounts that project's cwd in automatically (Gemini's own behavior, not
 # anything this script does); MCP server registration lives in ~/.gemini/settings.json (global,
 # set up by install.sh), not here, since the same MCP servers are meant to be available in every
-# project. See https://github.com/davindermahal/gemini-sandbox 's
+# project. See https://github.com/davindermahal/gemini-sandbox-toolkit-demo 's
 # .ai/guides/gemini-docker-sandbox-mcp.md for the full reasoning.
 set -euo pipefail
 

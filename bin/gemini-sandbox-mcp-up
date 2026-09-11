@@ -2,7 +2,7 @@
 # Starts a make-runner-mcp process for the CURRENT project (cwd), outside any sandbox, with this
 # machine's normal Docker access -- reachable from a sandboxed `gemini-sandbox` session only over
 # the network (host.docker.internal), never via a locally-spawned subprocess or a mounted socket.
-# See https://github.com/davindermahal/gemini-sandbox 's
+# See https://github.com/davindermahal/gemini-sandbox-toolkit-demo 's
 # .ai/guides/gemini-docker-sandbox-mcp.md Section 0 for the full reasoning, and that repo's
 # bin/mcp-up for the single-project version this generalizes (the process-management approach
 # below is copied from there deliberately, not re-derived -- see mcp-runner-lib.sh's comments for
