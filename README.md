@@ -9,6 +9,10 @@ Full background and the source-cited reasoning behind every decision here:
 (a demo project that exists purely to test this toolkit against something real — not a dependency
 of the toolkit), particularly `.ai/guides/gemini-docker-sandbox-mcp.md` Section 6.
 
+**New to this toolkit, or explaining it to a teammate?** See [`ARCHITECTURE.md`](ARCHITECTURE.md)
+for how the pieces fit together — in particular, why the MCP servers here split into two categories
+that update completely differently, and what to check when one isn't loading the version you expect.
+
 ## Requirements
 
 Docker (running, and your user in the `docker` group — needed to build the sandbox image; the
@@ -65,6 +69,27 @@ Or step by step: `make check-mcp-versions` (report only) / `make bump-mcp-versio
 
 Then commit, and see `CLAUDE.md`'s "Releasing" section for cutting a new version/tag.
 
+### Updating `make-runner-mcp`
+
+`make-runner-mcp` is pinned differently from the four packages above — it isn't published to npm
+and isn't baked into `sandbox.Dockerfile`; it's a host-side process (see
+[Docker access for your project's own containers](#docker-access-for-your-projects-own-containers)
+below), version-pinned to a GitHub release tag via the `MAKE_RUNNER_MCP_VERSION=` line in
+`bin/gemini-sandbox-mcp-up`. `make upgrade-mcps` bumps this pin too now, but **bumping the pin
+alone does not update any project already using it** — `gemini-sandbox-mcp-up` starts a
+long-running background process that keeps running whatever version it started with until you
+cycle it:
+
+```bash
+make check-make-runner-mcp-version   # report only
+make bump-make-runner-mcp-version    # write the new tag into bin/gemini-sandbox-mcp-up
+
+# Then, in EVERY project directory with an instance already running:
+cd your-project
+gemini-sandbox-mcp-down
+gemini-sandbox-mcp-up                # relaunches, fetching the newly-pinned tag
+```
+
 ### Updating the precompiled `better-sqlite3` binary
 
 `better-sqlite3` (an `ai-intake-mcp` dependency) has no prebuilt binary for Node 24 on any
@@ -115,7 +140,7 @@ vetted targets. That's not a limitation to work around — it's the same reasoni
 sandbox worth using at all.
 
 **Built into this toolkit**, not something you wire up by hand: [`make-runner-mcp`](https://github.com/davindermahal/make-runner-mcp)
-v2.0.0+ runs as its own process *outside* the sandbox — normal host-level Docker access, nothing
+runs as its own process *outside* the sandbox — normal host-level Docker access, nothing
 special — reached by the sandboxed session only over the network at
 `http://host.docker.internal:<port>/mcp`, with a required bearer-token auth (it refuses to start
 unauthenticated). `install.sh` puts three commands on your `PATH` for this:

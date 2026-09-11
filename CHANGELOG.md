@@ -4,6 +4,22 @@ All notable changes to this toolkit are documented here. Versions correspond to 
 GitHub Releases; each entry's text is also what the release tag itself is annotated with (see
 CLAUDE.md's "Releasing" section).
 
+## 0.4.0 — 2026-09-11
+
+### Added
+- `make check-make-runner-mcp-version` / `bump-make-runner-mcp-version`: `make-runner-mcp` gets its
+  own version-check/bump mechanism, folded into `make upgrade-mcps`. It isn't published to npm, so
+  it can't use the existing npm-registry-based mechanism — this one resolves the latest `vX.Y.Z`
+  git tag directly and writes it into `bin/gemini-sandbox-mcp-up`'s `MAKE_RUNNER_MCP_VERSION=` line.
+- `ARCHITECTURE.md`: explains how the toolkit's two categories of MCP server (image-baked/stateless
+  vs. `make-runner-mcp`'s host-side/stateful process) differ, and why updating `make-runner-mcp` is
+  a two-step process (bump the pin, then separately cycle every project's already-running instance).
+
+### Fixed
+- `bin/gemini-sandbox-mcp-up` was still pinned to `make-runner-mcp#v2.0.0`, three releases behind
+  current (`v2.0.2`) and with no way to notice short of reading the script — bumped to `v2.0.2`, and
+  the README's stale "v2.0.0+" wording removed.
+
 ## 0.3.0 — 2026-09-10
 
 ### Added

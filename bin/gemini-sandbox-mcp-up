@@ -17,6 +17,12 @@
 # never silently sandboxed either.
 set -euo pipefail
 
+# make-runner-mcp isn't on npm (GitHub-tag-distributed by design, see its own CLAUDE.md), so it's
+# pinned here directly rather than as a sandbox.Dockerfile ARG like the image-baked MCP packages.
+# `make check-make-runner-mcp-version`/`bump-make-runner-mcp-version` (see this toolkit's own
+# Makefile) grep/sed this exact line -- keep the `MAKE_RUNNER_MCP_VERSION=vX.Y.Z` shape intact.
+MAKE_RUNNER_MCP_VERSION=v2.0.2
+
 LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck disable=SC1091
 source "$LIB_DIR/mcp-runner-lib.sh"
@@ -44,7 +50,7 @@ PORT="$(mcp_runner_pick_free_port)"
 echo "$PORT" > "$STATE_DIR/port"
 
 setsid env PROJECT_DIR="$PROJECT_DIR" MCP_HTTP_TOKEN="$TOKEN" MCP_HTTP_PORT="$PORT" \
-  npx -y github:davindermahal/make-runner-mcp#v2.0.0 > "$STATE_DIR/log" 2>&1 < /dev/null &
+  npx -y "github:davindermahal/make-runner-mcp#$MAKE_RUNNER_MCP_VERSION" > "$STATE_DIR/log" 2>&1 < /dev/null &
 echo $! > "$STATE_DIR/pid"
 
 # A live process group is necessary but not sufficient: `npx -y github:...` does a real network

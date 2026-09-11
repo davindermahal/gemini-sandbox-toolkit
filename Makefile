@@ -101,10 +101,55 @@ bump-mcp-versions:
 		echo "test), then CHANGELOG.md + commit + tag + push per CLAUDE.md."; \
 	fi
 
-# The one-command version of the above: bump, rebuild+register, smoke-test. If nothing was
-# outdated, ./install.sh's own Docker layer cache makes the "rebuild" a no-op in seconds -- no need
-# to special-case that here. Stops short of CHANGELOG.md/commit/tag/push -- that still needs a
-# human/agent to write the actual release notes; see CLAUDE.md's "Releasing" section for that part.
-upgrade-mcps: bump-mcp-versions
+# --- make-runner-mcp version bumping ---------------------------------------------------------
+# Different from MCP_PACKAGES above: make-runner-mcp isn't baked into sandbox.Dockerfile and isn't
+# on npm -- it's a host-side process (bin/gemini-sandbox-mcp-up), version-pinned to a GitHub
+# release tag via that script's own `MAKE_RUNNER_MCP_VERSION=vX.Y.Z` line. "Latest" here means the
+# highest vX.Y.Z git tag on that repo (a real git operation), not an npm registry lookup.
+
+MAKE_RUNNER_MCP_REPO := davindermahal/make-runner-mcp
+MAKE_RUNNER_MCP_SCRIPT := bin/gemini-sandbox-mcp-up
+
+.PHONY: check-make-runner-mcp-version bump-make-runner-mcp-version
+
+# Reports whether a newer make-runner-mcp release tag exists than the one pinned in
+# bin/gemini-sandbox-mcp-up. Informational only -- doesn't change anything.
+check-make-runner-mcp-version:
+	@current="$$(grep -m1 '^MAKE_RUNNER_MCP_VERSION=' $(MAKE_RUNNER_MCP_SCRIPT) | cut -d= -f2)"; \
+	latest="$$(git ls-remote --tags --refs https://github.com/$(MAKE_RUNNER_MCP_REPO).git 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"; \
+	if [ "$$current" = "$$latest" ]; then \
+		echo "make-runner-mcp: $$current (current)"; \
+	else \
+		echo "make-runner-mcp: $$current -> $$latest available"; \
+	fi
+
+# Writes the latest tag into bin/gemini-sandbox-mcp-up's MAKE_RUNNER_MCP_VERSION= line.
+# Idempotent, safe to run any time. Unlike bump-mcp-versions above, this needs no image rebuild --
+# make-runner-mcp isn't baked into sandbox.Dockerfile -- but it DOES need every project currently
+# running an old instance to be cycled by hand (this Makefile has no visibility into which
+# projects have one running, so it can't do that part for you):
+#   cd your-project && gemini-sandbox-mcp-down && gemini-sandbox-mcp-up
+bump-make-runner-mcp-version:
+	@current="$$(grep -m1 '^MAKE_RUNNER_MCP_VERSION=' $(MAKE_RUNNER_MCP_SCRIPT) | cut -d= -f2)"; \
+	latest="$$(git ls-remote --tags --refs https://github.com/$(MAKE_RUNNER_MCP_REPO).git 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"; \
+	if [ "$$current" != "$$latest" ]; then \
+		sed -i "s/^MAKE_RUNNER_MCP_VERSION=.*/MAKE_RUNNER_MCP_VERSION=$$latest/" $(MAKE_RUNNER_MCP_SCRIPT); \
+		echo "make-runner-mcp: $$current -> $$latest"; \
+		echo ""; \
+		echo "Host-side process, not baked into the image -- no ./install.sh needed for this alone."; \
+		echo "But every project with an already-running instance must be cycled by hand to pick up"; \
+		echo "the new version:"; \
+		echo "  cd your-project && gemini-sandbox-mcp-down && gemini-sandbox-mcp-up"; \
+	else \
+		echo "make-runner-mcp already current -- nothing to bump."; \
+	fi
+
+# The one-command version of the above: bump both the image-baked packages and make-runner-mcp's
+# pin, rebuild+register, smoke-test. If nothing was outdated, ./install.sh's own Docker layer cache
+# makes the "rebuild" a no-op in seconds -- no need to special-case that here. Stops short of
+# CHANGELOG.md/commit/tag/push -- that still needs a human/agent to write the actual release notes;
+# see CLAUDE.md's "Releasing" section for that part. Also stops short of cycling any already-running
+# make-runner-mcp instance -- see bump-make-runner-mcp-version's own reminder above.
+upgrade-mcps: bump-mcp-versions bump-make-runner-mcp-version
 	./install.sh
 	./debug.sh
