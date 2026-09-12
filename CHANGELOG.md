@@ -4,6 +4,20 @@ All notable changes to this toolkit are documented here. Versions correspond to 
 GitHub Releases; each entry's text is also what the release tag itself is annotated with (see
 CLAUDE.md's "Releasing" section).
 
+## 0.6.0 — 2026-09-12
+
+### Changed
+- `make-runner-mcp` is now pulled via its npm package (`make-runner-mcp@X.Y.Z`) instead of a GitHub
+  tag, now that it's published to npm — `bin/gemini-sandbox-mcp-up`'s `MAKE_RUNNER_MCP_VERSION` is a
+  bare semver (no `v` prefix) rather than a git tag.
+- `check-make-runner-mcp-version`/`bump-make-runner-mcp-version` now use `npm view make-runner-mcp
+  version`, the same lookup `check-mcp-versions` already uses for the image-baked packages, instead
+  of `git ls-remote --tags`. They still write to `bin/gemini-sandbox-mcp-up`'s own variable rather
+  than a `sandbox.Dockerfile` `ARG`, since make-runner-mcp still isn't baked into the image.
+- `ARCHITECTURE.md` updated throughout to match (comparison table, lifecycle walkthrough, the
+  section on why `make-runner-mcp` keeps its own check/bump targets), plus new sections explaining
+  why it runs one instance per project and stays persistent rather than spawned per session.
+
 ## 0.5.0 — 2026-09-11
 
 ### Added
