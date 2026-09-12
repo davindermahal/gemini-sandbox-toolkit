@@ -102,28 +102,30 @@ bump-mcp-versions:
 	fi
 
 # --- make-runner-mcp version bumping ---------------------------------------------------------
-# Different from MCP_PACKAGES above: make-runner-mcp isn't baked into sandbox.Dockerfile and isn't
-# on npm -- it's a host-side process (bin/gemini-sandbox-mcp-up), version-pinned to a GitHub
-# release tag via that script's own `MAKE_RUNNER_MCP_VERSION=vX.Y.Z` line. "Latest" here means the
-# highest vX.Y.Z git tag on that repo (a real git operation), not an npm registry lookup.
+# make-runner-mcp is on npm now too (as of its own v2.1.0 -- see its CLAUDE.md), so the *lookup*
+# below is the exact same `npm view <pkg> version` mechanism as MCP_PACKAGES above. It still isn't
+# folded into that list, though: it isn't baked into sandbox.Dockerfile (it's a host-side process,
+# bin/gemini-sandbox-mcp-up), so the *write* target is that script's own
+# `MAKE_RUNNER_MCP_VERSION=X.Y.Z` line (bare semver -- an npm version spec, not a git tag), not a
+# Dockerfile ARG -- different enough from MCP_PACKAGES' write step that it keeps its own targets.
 
-MAKE_RUNNER_MCP_REPO := davindermahal/make-runner-mcp
+MAKE_RUNNER_MCP_PACKAGE := make-runner-mcp
 MAKE_RUNNER_MCP_SCRIPT := bin/gemini-sandbox-mcp-up
 
 .PHONY: check-make-runner-mcp-version bump-make-runner-mcp-version
 
-# Reports whether a newer make-runner-mcp release tag exists than the one pinned in
+# Reports whether a newer make-runner-mcp release exists than the one pinned in
 # bin/gemini-sandbox-mcp-up. Informational only -- doesn't change anything.
 check-make-runner-mcp-version:
 	@current="$$(grep -m1 '^MAKE_RUNNER_MCP_VERSION=' $(MAKE_RUNNER_MCP_SCRIPT) | cut -d= -f2)"; \
-	latest="$$(git ls-remote --tags --refs https://github.com/$(MAKE_RUNNER_MCP_REPO).git 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"; \
+	latest="$$(npm view $(MAKE_RUNNER_MCP_PACKAGE) version)"; \
 	if [ "$$current" = "$$latest" ]; then \
 		echo "make-runner-mcp: $$current (current)"; \
 	else \
 		echo "make-runner-mcp: $$current -> $$latest available"; \
 	fi
 
-# Writes the latest tag into bin/gemini-sandbox-mcp-up's MAKE_RUNNER_MCP_VERSION= line.
+# Writes the latest version into bin/gemini-sandbox-mcp-up's MAKE_RUNNER_MCP_VERSION= line.
 # Idempotent, safe to run any time. Unlike bump-mcp-versions above, this needs no image rebuild --
 # make-runner-mcp isn't baked into sandbox.Dockerfile -- but it DOES need every project currently
 # running an old instance to be cycled by hand (this Makefile has no visibility into which
@@ -131,7 +133,7 @@ check-make-runner-mcp-version:
 #   cd your-project && gemini-sandbox-mcp-down && gemini-sandbox-mcp-up
 bump-make-runner-mcp-version:
 	@current="$$(grep -m1 '^MAKE_RUNNER_MCP_VERSION=' $(MAKE_RUNNER_MCP_SCRIPT) | cut -d= -f2)"; \
-	latest="$$(git ls-remote --tags --refs https://github.com/$(MAKE_RUNNER_MCP_REPO).git 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"; \
+	latest="$$(npm view $(MAKE_RUNNER_MCP_PACKAGE) version)"; \
 	if [ "$$current" != "$$latest" ]; then \
 		sed -i "s/^MAKE_RUNNER_MCP_VERSION=.*/MAKE_RUNNER_MCP_VERSION=$$latest/" $(MAKE_RUNNER_MCP_SCRIPT); \
 		echo "make-runner-mcp: $$current -> $$latest"; \

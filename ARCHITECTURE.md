@@ -139,19 +139,26 @@ and assume you're done:
 Skipping step 2 is the most common way this looks like "it's not updating" when the pin was, in
 fact, bumped correctly.
 
-## Why `make upgrade-mcps` can't reach `make-runner-mcp` the same way
+## Why `make-runner-mcp` still keeps its own check/bump targets
 
-The image-baked packages' check/bump mechanism (`make check-mcp-versions`) works by asking the npm
-registry (`npm view <package> version`) what the latest published version is. `make-runner-mcp`
-isn't published to npm at all — it's deliberately GitHub-tag-distributed (see its own repo's
-`CLAUDE.md` "Distribution plan": a public repo, `npx github:owner/repo#vX.Y.Z`, so pulling a new
-version is always a deliberate, visible tag bump, never an unpinned branch reference that could
-silently change on everyone's machine with a bad push). So its own check/bump targets
-(`check-make-runner-mcp-version` / `bump-make-runner-mcp-version`) ask a different question —
-"what's the highest `vX.Y.Z` git tag on that repo?" (`git ls-remote --tags`) — and write the answer
-into a different kind of file (a shell script's variable assignment, not a Dockerfile `ARG`).
-`make upgrade-mcps` runs both mechanisms together for convenience, but they remain two genuinely
-different lookups underneath.
+`make-runner-mcp` is published to npm now (as of its own v2.1.0 — see its repo's `CLAUDE.md`), so
+`check-make-runner-mcp-version`/`bump-make-runner-mcp-version` ask the *same* question the
+image-baked packages' `check-mcp-versions` does — `npm view <package> version` — not the
+`git ls-remote --tags` lookup this section used to describe. What's still genuinely different is
+where the answer gets *written*: the image-baked packages' bump writes a `sandbox.Dockerfile`
+`ARG` (picked up on the next image rebuild); `make-runner-mcp` isn't image-baked at all — it's a
+host-side process (see above) — so its pin lives in `bin/gemini-sandbox-mcp-up`'s own
+`MAKE_RUNNER_MCP_VERSION=` shell variable instead, and bumping it needs no image rebuild but *does*
+still need every project with an already-running instance cycled by hand (see "Why 'updating
+make-runner-mcp' is a two-step process" above — that part is about it being a long-lived process,
+not about npm vs. GitHub, and doesn't change here). `make upgrade-mcps` runs both mechanisms
+together for convenience, but they remain two separate targets because of that write-target
+difference, even though the lookup itself is now identical.
+
+Note that npm publishing didn't replace GitHub-tag distribution for `make-runner-mcp` — that repo
+still supports `npx github:owner/repo#vX.Y.Z` unauthenticated, same as before. This toolkit's own
+`bin/gemini-sandbox-mcp-up` just uses the npm spec (`make-runner-mcp@X.Y.Z`) now, specifically so
+its version check could share the same mechanism as everything else here.
 
 ## Where to look when something's wrong
 

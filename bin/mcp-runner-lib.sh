@@ -42,11 +42,13 @@ mcp_runner_state_dir() {
 
 # True (exit 0) if a make-runner-mcp process GROUP is alive for the given state directory. Checks
 # the process *group* (a negative PID), not a single PID -- verified directly (ps --forest) that
-# `npx -y github:...` is not one process: it's npm-exec -> `sh -c 'make-runner-mcp'` -> the real
-# `node .../make-runner-mcp`, three levels deep, and which level survives varies (observed: the
-# top-level npm-exec process exits on its own once package resolution is already cached locally,
-# orphaning the real server two levels down where a plain `$!`-tracked PID can't find it -- this
-# is a real bug that was hit and fixed in gemini-sandbox/bin/mcp-up, generalized here). Launching
+# `npx -y ...` is not one process (true of both the GitHub-tag spec this originally shipped with
+# and the npm spec it uses now -- re-verified against the npm one when make-runner-mcp moved to
+# npm): it's npm-exec -> `sh -c 'make-runner-mcp'` -> the real `node .../make-runner-mcp`, three
+# levels deep, and which level survives varies (observed: the top-level npm-exec process exits on
+# its own once package resolution is already cached locally, orphaning the real server two levels
+# down where a plain `$!`-tracked PID can't find it -- this is a real bug that was hit and fixed
+# in gemini-sandbox/bin/mcp-up, generalized here). Launching
 # under `setsid` (gemini-sandbox-mcp-up) makes the launched process its own session/process-group
 # leader, and everything it forks inherits that same group, so checking/killing the *group*
 # reliably reaches all of them regardless of which level ends up being the "top" one -- the group

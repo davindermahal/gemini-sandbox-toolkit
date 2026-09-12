@@ -17,11 +17,14 @@
 # never silently sandboxed either.
 set -euo pipefail
 
-# make-runner-mcp isn't on npm (GitHub-tag-distributed by design, see its own CLAUDE.md), so it's
-# pinned here directly rather than as a sandbox.Dockerfile ARG like the image-baked MCP packages.
+# make-runner-mcp is published to npm (as of make-runner-mcp v2.1.0 -- see its own CLAUDE.md) but
+# still isn't baked into sandbox.Dockerfile like the image-baked MCP packages, since it's a
+# host-side process, not something spawned inside the sandbox image -- so it keeps its own pin
+# here rather than joining the Makefile's MCP_PACKAGES/sandbox.Dockerfile ARG mechanism.
 # `make check-make-runner-mcp-version`/`bump-make-runner-mcp-version` (see this toolkit's own
-# Makefile) grep/sed this exact line -- keep the `MAKE_RUNNER_MCP_VERSION=vX.Y.Z` shape intact.
-MAKE_RUNNER_MCP_VERSION=v2.0.2
+# Makefile) grep/sed this exact line -- keep the `MAKE_RUNNER_MCP_VERSION=X.Y.Z` shape intact. Bare
+# semver, no `v` prefix: this is now an npm version spec (`make-runner-mcp@X.Y.Z`), not a git tag.
+MAKE_RUNNER_MCP_VERSION=2.1.1
 
 LIB_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck disable=SC1091
@@ -50,13 +53,13 @@ PORT="$(mcp_runner_pick_free_port)"
 echo "$PORT" > "$STATE_DIR/port"
 
 setsid env PROJECT_DIR="$PROJECT_DIR" MCP_HTTP_TOKEN="$TOKEN" MCP_HTTP_PORT="$PORT" \
-  npx -y "github:davindermahal/make-runner-mcp#$MAKE_RUNNER_MCP_VERSION" > "$STATE_DIR/log" 2>&1 < /dev/null &
+  npx -y "make-runner-mcp@$MAKE_RUNNER_MCP_VERSION" > "$STATE_DIR/log" 2>&1 < /dev/null &
 echo $! > "$STATE_DIR/pid"
 
-# A live process group is necessary but not sufficient: `npx -y github:...` does a real network
-# round-trip (git ls-remote, then fetch if not already cached) before make-runner-mcp itself even
-# starts, which can take several seconds on an uncached/first run -- a fixed short sleep here
-# reported "started" while the server wasn't actually listening yet (caught live in
+# A live process group is necessary but not sufficient: `npx -y ...` does a real network
+# round-trip (npm registry resolution, then fetch if not already cached) before make-runner-mcp
+# itself even starts, which can take several seconds on an uncached/first run -- a fixed short
+# sleep here reported "started" while the server wasn't actually listening yet (caught live in
 # gemini-sandbox/bin/mcp-up: a curl right after a 1s sleep got connection-refused). Poll for the
 # port actually accepting connections instead, up to a generous timeout, so "started" here means
 # "reachable," not just "processes exist." bash's /dev/tcp avoids a dependency on curl/nc.

@@ -71,23 +71,24 @@ Then commit, and see `CLAUDE.md`'s "Releasing" section for cutting a new version
 
 ### Updating `make-runner-mcp`
 
-`make-runner-mcp` is pinned differently from the four packages above — it isn't published to npm
-and isn't baked into `sandbox.Dockerfile`; it's a host-side process (see
+`make-runner-mcp` is on npm now too, so its version check uses the exact same `npm view` mechanism
+as the four packages above — but it's still pinned separately from them, since it isn't baked into
+`sandbox.Dockerfile`; it's a host-side process (see
 [Docker access for your project's own containers](#docker-access-for-your-projects-own-containers)
-below), version-pinned to a GitHub release tag via the `MAKE_RUNNER_MCP_VERSION=` line in
-`bin/gemini-sandbox-mcp-up`. `make upgrade-mcps` bumps this pin too now, but **bumping the pin
-alone does not update any project already using it** — `gemini-sandbox-mcp-up` starts a
-long-running background process that keeps running whatever version it started with until you
-cycle it:
+below), version-pinned via the `MAKE_RUNNER_MCP_VERSION=` line in `bin/gemini-sandbox-mcp-up`
+(a bare npm version, e.g. `2.1.1` — not a `v`-prefixed git tag). `make upgrade-mcps` bumps this pin
+too now, but **bumping the pin alone does not update any project already using it** —
+`gemini-sandbox-mcp-up` starts a long-running background process that keeps running whatever
+version it started with until you cycle it:
 
 ```bash
 make check-make-runner-mcp-version   # report only
-make bump-make-runner-mcp-version    # write the new tag into bin/gemini-sandbox-mcp-up
+make bump-make-runner-mcp-version    # write the new version into bin/gemini-sandbox-mcp-up
 
 # Then, in EVERY project directory with an instance already running:
 cd your-project
 gemini-sandbox-mcp-down
-gemini-sandbox-mcp-up                # relaunches, fetching the newly-pinned tag
+gemini-sandbox-mcp-up                # relaunches, fetching the newly-pinned version
 ```
 
 ### Updating the precompiled `better-sqlite3` binary
