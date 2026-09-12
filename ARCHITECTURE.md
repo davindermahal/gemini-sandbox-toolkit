@@ -16,8 +16,8 @@ comes from applying one category's mental model to the other.
 | **Servers** | `chrome-devtools-mcp`, `ai-intake-mcp`, `ai-intake-documentation-mcp` | `make-runner-mcp` only |
 | **Lives** | Inside the `gemini-sandbox:latest` Docker image, spawned fresh each session | A standalone host process, one per project, running for as long as you leave it |
 | **Registered in** | `~/.gemini/settings.json` — global, written once by `install.sh` | The **current project's own** `.gemini/settings.json` — written by `bin/gemini-sandbox` on *every* invocation |
-| **Version pin lives in** | `sandbox.Dockerfile`, as `ARG ..._VERSION=x.y.z` | `bin/gemini-sandbox-mcp-up`, as `MAKE_RUNNER_MCP_VERSION=vX.Y.Z` |
-| **Version source** | npm registry | A GitHub release tag (not published to npm at all) |
+| **Version pin lives in** | `sandbox.Dockerfile`, as `ARG ..._VERSION=x.y.z` | `bin/gemini-sandbox-mcp-up`, as `MAKE_RUNNER_MCP_VERSION=X.Y.Z` |
+| **Version source** | npm registry | npm registry too (an `npx github:owner/repo#vX.Y.Z` spec still works unauthenticated against that repo directly, but this toolkit doesn't use it) |
 | **To pick up a new version** | `make upgrade-mcps` (bumps the pin, rebuilds the image, re-registers) | Bump the pin, **then separately** cycle every project's running instance (see below) |
 | **Why it's opt-out vs. opt-in** | Always on — safe by design: no standing host access, scoped to one session | Explicit opt-in per project (`gemini-sandbox-mcp-up`) — a different risk class, see below |
 
@@ -34,6 +34,24 @@ process with normal host Docker access, reachable by the sandboxed session only 
 That's a fundamentally different lifecycle — one long-lived process per project instead of "spawned
 fresh, every session, everywhere" — which is why it needs its own registration mechanism, its own
 state, and its own (currently manual) update procedure.
+
+**Why one instance per project, not one shared global instance:** not really a Makefile-parsing
+constraint — a single process could in principle accept a project path per request. It's blast
+radius. Each instance is bound to exactly one `PROJECT_DIR`, with its own port and its own auth
+token generated for that project alone. If a token ever leaked or got misused, it only grants the
+ability to run `make` targets in *that one project* — not arbitrary Docker access across every
+project you've ever used this with. A single shared instance would mean one token, one surface,
+reaching every project on the machine, which is a much bigger thing to have to trust and secure.
+Per-project isolation also means two projects running simultaneously just don't interact — distinct
+ports, distinct tokens, no shared state to reason about (see "Two projects running this
+simultaneously don't collide," below).
+
+**Why persistent, rather than spawned-and-torn-down each session like the image-baked servers:**
+starting it has real, non-trivial cost — an `npx` fetch (from npm) plus real Docker interaction —
+and unlike the stateless servers, you'd plausibly want the *same* project's instance to keep serving
+multiple `gemini-sandbox` sessions or terminal windows without relaunching each time. So it's
+opt-in and long-lived, managed explicitly via the `gemini-sandbox-mcp-*` commands, rather than
+something `gemini-sandbox` starts silently on your behalf every session.
 
 ## Walking through `gemini-sandbox -s`
 
@@ -85,12 +103,12 @@ gemini-sandbox-mcp-up
 2. If nothing's running yet: picks a free port, generates (or reuses) a random auth token, then
    launches, under `setsid` (so the whole process tree can be killed as one group later):
    ```
-   npx -y github:davindermahal/make-runner-mcp#$MAKE_RUNNER_MCP_VERSION
+   npx -y make-runner-mcp@$MAKE_RUNNER_MCP_VERSION
    ```
    with `PROJECT_DIR`, `MCP_HTTP_TOKEN`, `MCP_HTTP_PORT` set in its environment.
 3. Polls the port until it's actually accepting connections (not just "the process exists" — `npx`
-   itself does a real network round-trip resolving the GitHub ref before `make-runner-mcp` even
-   starts, which can take several seconds uncached).
+   itself does a real network round-trip resolving the package from the npm registry before
+   `make-runner-mcp` even starts, which can take several seconds uncached).
 4. Tells you it's ready. This process **keeps running** — in the background, detached from your
    terminal — until you explicitly stop it.
 
